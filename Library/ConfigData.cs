@@ -88,6 +88,28 @@ namespace OmenMon.Library {
         // Whether to use the Embedded Controller instead of a BIOS call to set the fan level
         public static bool FanLevelUseEc = false;
 
+        // Whether to periodically query fan count in GUI mode,
+        // keeping the BIOS performance-control context alive on models that need it
+        public static bool PerformanceHeartbeatEnabled = false;
+
+        // Performance heartbeat interval [s]
+        public static int PerformanceHeartbeatInterval = 30;
+
+        // Whether the performance heartbeat should only run while fan control is active
+        public static bool PerformanceHeartbeatOnlyWhenFanControlActive = false;
+
+        // Optionally re-apply maximum fan speed during the performance heartbeat
+        public static bool PerformanceHeartbeatReapplyFanMax = false;
+
+        // Optionally force maximum fan speed during the performance heartbeat
+        public static bool PerformanceHeartbeatForceFanMax = false;
+
+        // Optionally re-apply GPU power during the performance heartbeat
+        public static bool PerformanceHeartbeatReapplyGpuPower = false;
+
+        // Advanced experimental option: optionally re-apply CPU power during the heartbeat
+        public static bool PerformanceHeartbeatReapplyCpuPower = false;
+
         // Fan modes that should always be placed on top of the list
         // (the rest are legacy modes, irrelevant but kept for completeness)
         public static List<string> FanModesSticky = new List<string> { "Default", "Performance", "Cool" };

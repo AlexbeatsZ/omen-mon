@@ -96,6 +96,7 @@ namespace OmenMon.AppGui {
         private const string I_SET_STAY_TOP = Gui.M_ACT + Gui.G_SET + "StayTop";
         private const string I_SET_ICON_DYN = Gui.M_ACT + Gui.G_SET + "IconDyn";
         private const string I_SET_ICON_DYN_BG = Gui.M_ACT + Gui.G_SET + "IconDynBg";
+        private const string I_SET_PERFORMANCE_HEARTBEAT = Gui.M_ACT + Gui.G_SET + "PerformanceHeartbeat";
         private const string I_SET_TASK_GUI = P_SET_TASK + S_SET_TASK_GUI;
         private const string I_SET_AUTOCONFIG = Gui.M_ACT + Gui.G_SET + "Autoconfig";
         private const string I_SET_TASK_KEY = P_SET_TASK + S_SET_TASK_KEY;
@@ -210,7 +211,7 @@ namespace OmenMon.AppGui {
         private void EventActionFanMax(object sender, EventArgs e) {
 
             // Toggle the maximum fan speed
-            Context.Op.Platform.Fans.SetMax(!((ToolStripMenuItem) sender).Checked);
+            Context.Op.FanMaxSet(!((ToolStripMenuItem) sender).Checked);
 
             // Update the main form, if available
             if(Context.FormMain != null)
@@ -440,6 +441,24 @@ namespace OmenMon.AppGui {
 
         }
 
+        // Toggles the performance-control heartbeat on or off
+        private void EventActionTogglePerformanceHeartbeat(object sender, EventArgs e) {
+
+            // Toggle the setting
+            Config.PerformanceHeartbeatEnabled = !Config.PerformanceHeartbeatEnabled;
+
+            // Reset the heartbeat tick counter,
+            // the change takes effect immediately
+            Context.UpdateHeartbeatTick = 0;
+
+            // Save the settings
+            Config.Save();
+
+            // Update the menu
+            ((ToolStripMenuItem) sender).Checked = Config.PerformanceHeartbeatEnabled;
+
+        }
+
         // Toggles whether the application will automatically apply the configuration on startup
         private void EventActionToggleAutoConfig(object sender, EventArgs e) {
 
@@ -662,6 +681,8 @@ namespace OmenMon.AppGui {
                 new ToolStripSeparator(),
                 new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_SET_ICON_DYN), null, EventActionToggleIconDynamic, I_SET_ICON_DYN),
                 new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_SET_ICON_DYN_BG), null, EventActionToggleIconDynamicBackground, I_SET_ICON_DYN_BG),
+                new ToolStripSeparator(),
+                new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_SET_PERFORMANCE_HEARTBEAT), null, EventActionTogglePerformanceHeartbeat, I_SET_PERFORMANCE_HEARTBEAT),
                 new ToolStripSeparator(),
                 new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_SET_TASK_GUI), null, EventActionToggleTask, I_SET_TASK_GUI),
                 new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_SET_AUTOCONFIG), null, EventActionToggleAutoConfig, I_SET_AUTOCONFIG),
@@ -934,6 +955,9 @@ namespace OmenMon.AppGui {
             ((ToolStripMenuItem) MenuSettings.DropDownItems[I_SET_ICON_DYN]).Checked = Context.Icon.IsDynamic;
             ((ToolStripMenuItem) MenuSettings.DropDownItems[I_SET_ICON_DYN_BG]).Checked = Context.Icon.IsDynamicBackground;
             ((ToolStripMenuItem) MenuSettings.DropDownItems[I_SET_ICON_DYN_BG]).Enabled = Context.Icon.IsDynamic;
+
+            // Performance heartbeat
+            ((ToolStripMenuItem) MenuSettings.DropDownItems[I_SET_PERFORMANCE_HEARTBEAT]).Checked = Config.PerformanceHeartbeatEnabled;
 
             // Automatic configuration
             ((ToolStripMenuItem) MenuSettings.DropDownItems[I_SET_AUTOCONFIG]).Checked = Config.AutoConfig;

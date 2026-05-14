@@ -232,6 +232,7 @@ namespace OmenMon.Library.Locale {
                 ["GuiMenuActSetStayTop"] = "Stay on Top",
                 ["GuiMenuActSetIconDyn"] = "Dynamic Icon",
                 ["GuiMenuActSetIconDynBg"] = "Dynamic Background",
+                ["GuiMenuActSetPerformanceHeartbeat"] = "Performance Heartbeat",
                 ["GuiMenuActSetTaskGui"] = "Start with Windows",
                 ["GuiMenuActSetAutoconfig"] = "Apply Settings on Startup",
                 ["GuiMenuActSetTaskKey"] = "Intercept Omen Key",

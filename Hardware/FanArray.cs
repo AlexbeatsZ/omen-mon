@@ -15,6 +15,9 @@ namespace OmenMon.Hardware.Platform {
 
         public IFan[] Fan { get; }
 
+        // Retrieves the number of fans
+        public byte GetCount();
+
         // Retrieves or sets the countdown value
         // until automatic settings are restored [s]
         public int GetCountdown();
@@ -101,6 +104,11 @@ namespace OmenMon.Hardware.Platform {
         public int GetCountdown() {
             this.Countdown.Update();
             return this.Countdown.GetValue();
+        }
+
+        // Retrieves the number of fans
+        public byte GetCount() {
+            return Hw.BiosGet<byte>(Hw.Bios.GetFanCount);
         }
 
         // Sets the countdown value [s]

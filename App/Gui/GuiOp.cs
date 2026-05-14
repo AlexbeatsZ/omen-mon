@@ -29,6 +29,9 @@ namespace OmenMon.AppGui {
         // Flag to indicate if running on full power
         public bool FullPower { get; private set; }
 
+        // Flag to avoid overlapping performance heartbeat calls
+        private volatile bool PerformanceHeartbeatBusy;
+
         // Constructs the operation-running class
         public GuiOp(GuiTray context) {
 
@@ -47,6 +50,9 @@ namespace OmenMon.AppGui {
 
             // Set the full power flag
             this.FullPower = this.Platform.System.IsFullPower();
+
+            // Set the heartbeat state flag
+            this.PerformanceHeartbeatBusy = false;
 
         }
 
@@ -210,6 +216,81 @@ namespace OmenMon.AppGui {
                 Context.ToggleFormMain();
 
             }
+
+        }
+
+        // Performs a lightweight BIOS call to keep the performance-control context alive
+        public void PerformanceHeartbeat() {
+
+            // Optional guard for users who only want the heartbeat
+            // while OmenMon is actively maintaining a fan setting
+            if(Config.PerformanceHeartbeatOnlyWhenFanControlActive
+                && !this.Program.IsEnabled
+                && !this.Platform.Fans.GetMax())
+                return;
+
+            // Equivalent to: OmenMon.exe -Bios FanCount
+            this.Platform.Fans.GetCount();
+
+            if(Config.PerformanceHeartbeatForceFanMax) {
+                if(this.Platform.Fans.GetOff())
+                    this.Platform.Fans.SetOff(false);
+                this.Platform.Fans.SetMax(true);
+            }
+
+            // Optional reapply logic is deliberately disabled by default
+            if(Config.PerformanceHeartbeatReapplyFanMax
+                && this.Platform.Fans.GetMax())
+                this.Platform.Fans.SetMax(true);
+
+            if(Config.PerformanceHeartbeatReapplyGpuPower
+                && this.Program.IsEnabled)
+                this.Platform.System.SetGpuPower(
+                    new BiosData.GpuPowerData(
+                        Config.FanProgram[this.Program.GetName()].GpuPower));
+
+            // CPU power reapply is intentionally not implemented here.
+            // The config flag is reserved for future advanced experiments:
+            // repeated CPU power writes can fight firmware, DPTF, thermals,
+            // AC adapter limits, and shared CPU/GPU power budgeting.
+
+        }
+
+        // Sets maximum fan speed after refreshing the performance-control context
+        public void FanMaxSet(bool flag) {
+
+            // Some newer platforms require this context refresh before
+            // performance-control writes reliably take effect from GUI mode.
+            try {
+                this.Platform.Fans.GetCount();
+            } catch { }
+
+            this.Platform.Fans.SetMax(flag);
+
+        }
+
+        // Starts the performance heartbeat in another thread
+        // so that BIOS/WMI delays do not block the GUI timer
+        public void PerformanceHeartbeatRun() {
+
+            if(this.PerformanceHeartbeatBusy)
+                return;
+
+            this.PerformanceHeartbeatBusy = true;
+
+            Thread heartbeat = new Thread(delegate() {
+                try {
+                    this.PerformanceHeartbeat();
+                } catch {
+                    // Ignore heartbeat failures in GUI mode.
+                    // Unsupported platforms or transient BIOS errors
+                    // must not bring down the tray application.
+                } finally {
+                    this.PerformanceHeartbeatBusy = false;
+                }
+            });
+            heartbeat.IsBackground = true;
+            heartbeat.Start();
 
         }
 

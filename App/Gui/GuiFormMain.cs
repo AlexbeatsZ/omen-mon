@@ -298,7 +298,7 @@ namespace OmenMon.AppGui {
                          Context.Op.Platform.Fans.SetOff(false);
 
                      // Set the fan to maximum speed
-                     Context.Op.Platform.Fans.SetMax(true);
+                     Context.Op.FanMaxSet(true);
 
                 }
 
@@ -325,7 +325,7 @@ namespace OmenMon.AppGui {
 
                     // Set the fans to maximum speed
                     if(!isFanMax) // If not already at maximum speed
-                        Context.Op.Platform.Fans.SetMax(true);
+                        Context.Op.FanMaxSet(true);
 
                 // Otherwise, we just set the speed levels normally
                 } else {

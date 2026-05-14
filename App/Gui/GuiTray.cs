@@ -48,6 +48,7 @@ namespace OmenMon.AppGui {
         // the last update of a particular category
         internal int UpdateIconTick;
         internal int UpdateMonitorTick;
+        internal int UpdateHeartbeatTick;
         internal int UpdateProgramTick;
 #endregion
 
@@ -281,8 +282,14 @@ namespace OmenMon.AppGui {
                 this.UpdateIconTick = 0;
             if(this.UpdateMonitorTick >= Config.UpdateMonitorInterval)
                 this.UpdateMonitorTick = 0;
+            if(this.UpdateHeartbeatTick >= Math.Max(5, Config.PerformanceHeartbeatInterval))
+                this.UpdateHeartbeatTick = 0;
             if(this.UpdateProgramTick >= Config.UpdateProgramInterval)
                 this.UpdateProgramTick = 0;
+
+            // Keep the BIOS performance-control context alive if configured
+            if(Config.PerformanceHeartbeatEnabled && this.UpdateHeartbeatTick++ == 0)
+                this.Op.PerformanceHeartbeatRun();
 
             // Update the fan program or extend the countdown
             if(this.UpdateProgramTick++ == 0) {
