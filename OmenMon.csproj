@@ -62,6 +62,8 @@
         <Compile Include="App\Cli\CliOpProg.cs"/>
         <Compile Include="App\Cli\CliOpTask.cs"/>
         <Compile Include="App\Gui\Gui.cs"/>
+        <Compile Include="App\Gui\FanPlan.cs"/>
+        <Compile Include="App\Gui\GuiLog.cs"/>
         <Compile Include="App\Gui\GuiOp.cs"/>
         <Compile Include="App\Gui\GuiFilter.cs"/>
         <Compile Include="App\Gui\GuiFormAbout.cs"/>

@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 using OmenMon.External;
 using OmenMon.Hardware.Bios;
@@ -13,114 +14,68 @@ using OmenMon.Library;
 
 namespace OmenMon.AppGui {
 
-    // The main GUI form
     public partial class GuiFormMain : Form {
 
 #region Variables
-        // Color picker dialog stored globally to preserve user colors
         private ColorDialogEx ColorPicker;
-
-        // Color preset data source
         private List<Object> ColorPresets;
-
-        // Fan mode data source
         private List<Object> FanModes;
-
-        // Fan program data source
         private List<Object> FanPrograms;
-
-        // Holds the custom font
+        private List<FanPlan> FanPlans;
         private Font FigureFont;
-
-        // Stores the class managing the recolored keyboard drawing
         internal GuiKbd Kbd;
-
-        // Stores the previous DPI value, for dynamically-updated scaling
         private int LastDpi;
-
-        // Stores both parts of the system status, so that the other part
-        // does not have to be regenerated every time one changes
         private string SysInfo;
         private string SysStatus;
-
-        // Parent class reference
+        private string LastOperationStatus;
         private GuiTray Context;
-
-        // Stores the component container
+        private GuiLog Log;
         private System.ComponentModel.IContainer Components;
-#endregion Variables
+#endregion
 
 #region Construction & Disposal
-        // Constructs the form
         public GuiFormMain() {
 
-            // Initialize the parent class reference
             this.Context = GuiTray.Context;
-
-            // Initialize the component model container
             this.Components = new System.ComponentModel.Container();
+            this.ColorPresets = new List<Object>();
+            this.FanModes = new List<Object>();
+            this.FanPrograms = new List<Object>();
+            this.FanPlans = new List<FanPlan>();
+            this.LastOperationStatus = "最近操作: -";
 
-            // Initialize the data sources
-            ColorPresets = new List<Object>();
-            FanModes = new List<Object>();
-            FanPrograms = new List<Object>();
-
-            // Initialize the form components
             Initialize();
+            this.Log = new GuiLog(this.RtfLog);
 
-            // Pre-populate the last DPI setting to the value at launch
             this.LastDpi = (int) Gui.GetDeviceContextDpi(IntPtr.Zero);
 
-            // For keyboards that support backlight and color settings
             if(Context.Op.Platform.System.GetKbdBacklightSupport()
                 && Context.Op.Platform.System.GetKbdColorSupport()) {
 
-                // Initialize the keyboard color management class
                 this.Kbd = new GuiKbd(this.Context);
-
-                // Update the keyboard picture
                 this.PicKbd.Image = Kbd.GetImage();
-
-                // Initialize the color picker
                 this.ColorPicker = new ColorDialogEx(UpdateKbdCallback);
-
-                // Pre-populate the custom colors for the color picker
                 this.ColorPicker.CustomColors = Kbd.UpdateColorPicker(Config.GuiColorPickerCustom);
 
             } else
-
-                // Show a static disabled keyboard image if unsupported
                 this.PicKbd.Image = OmenMon.Resources.KeyboardOff;
 
-            // Set up the fan presets, system status data
-            // and temperature readout captions (static)
             SetupFanCtl();
             SetupSys();
             SetupTmp();
-
-            // Update the controls to reflect the initial hardware state
             UpdateAll();
 
-            // Post a status message as a welcome
-            UpdateSysMsg(
-                Conv.RTF_CF6 + Config.AppName + " "
-                + Conv.RTF_CF5 + Config.AppVersion + " "
-                + Conv.RTF_CF2 + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "MsgWelcome"));
+            this.Log.Info(Config.AppName + " " + Config.AppVersion + " GUI ready.");
+            UpdateSysMsg("Welcome");
 
         }
 
-        // Handles component disposal
         protected override void Dispose(bool isDisposing) {
-	
             if(isDisposing && Components != null)
                 Components.Dispose();
-	
-            // Perform the usual tasks
             base.Dispose(isDisposing);
-	
         }
 
-        // Makes the F1 key open the About dialog
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
             if(keyData == Keys.F1) {
                 GuiOp.About();
@@ -129,7 +84,6 @@ namespace OmenMon.AppGui {
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        // Makes the Esc key close the form
         protected override bool ProcessDialogKey(Keys keyData) {
             if(Form.ModifierKeys == Keys.None && keyData == Keys.Escape) {
                 this.Close();
@@ -138,283 +92,143 @@ namespace OmenMon.AppGui {
             return base.ProcessDialogKey(keyData);
         }
 
-        // Overrides the window procedure to capture a DPI-change event
-        // Catching this via the .NET API is conditional upon a configuration setting,
-        // which would require a *.exe.config file to be present in the same location
-        // Much better to keep everything contained to a single file, so not an option
         protected override void WndProc(ref Message m) {
-
-            // Alternatively, override DefWndProc to intercept WM_GETDPISCALEDSIZE,
-            // which gets dispatched before any DPI changes will have happened
             if(m.Msg == User32.WM_DPICHANGED)
-
-                    // Update the form to match the new scaling
-                    // Parameter is the horizontal DPI, but vertical is always the same
-                    UpdateDpi(m.WParam.ToInt32() & 0xFFFF);
-
-            // Run the base procedure
+                UpdateDpi(m.WParam.ToInt32() & 0xFFFF);
             base.WndProc(ref m);
-
         }
 #endregion
 
 #region Event Actions
-        // Toggles the keyboard backlight on or off
         private void EventActionBacklight(object sender, EventArgs e) {
-
-            if(Kbd != null) // Use the keyboard class
-                Kbd.SetBacklight(!this.ChkKbdBacklight.Checked);
-
-            else // Fallback case for no customizable backlight color, only backlight toggle
-                Context.Op.Platform.System.SetKbdBacklight(!this.ChkKbdBacklight.Checked);
-
+            try {
+                if(Kbd != null)
+                    Kbd.SetBacklight(!this.ChkKbdBacklight.Checked);
+                else
+                    Context.Op.Platform.System.SetKbdBacklight(!this.ChkKbdBacklight.Checked);
+                this.Log.Info("SetKbdBacklight(" + (!this.ChkKbdBacklight.Checked).ToString() + ") OK");
+            } catch(Exception ex) {
+                this.Log.Error("SetKbdBacklight failed: " + ex.Message);
+            }
             UpdateKbd();
         }
 
-        // Deletes a color preset
         private void EventActionColorPresetDel(object sender, EventArgs e) {
-
-            // No preset selected
             if(this.CmbKbdColorPreset.SelectedValue == null || (string) this.CmbKbdColorPreset.SelectedValue == "")
-                MessageBox.Show(
-                    this, // Modal
-                    Config.Locale.Get(Config.L_GUI_MAIN + "KbdColorPresetDelNoSel"),
-                    Config.Locale.Get(Config.L_GUI_MAIN + "KbdColorPresetDel"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation);
+                return;
 
-            else if(MessageBox.Show(
-                    this, // Modal
-                    Config.Locale.Get(Config.L_GUI_MAIN + "KbdColorPresetDelPrompt") + ": "
-                        + ((object) this.CmbKbdColorPreset.SelectedItem)
-                            .GetType()
-                            .GetProperty("Text")
-                            .GetValue(this.CmbKbdColorPreset.SelectedItem, null)
-                        + Environment.NewLine
-                        + Config.Locale.Get(Config.L_GUI_MAIN + "KbdColorPresetDelConfirm"),
-                    Config.Locale.Get(Config.L_GUI_MAIN + "KbdColorPresetDel"),
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Asterisk,
-                    MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-
-                Config.ColorPreset.Remove((string) this.CmbKbdColorPreset.SelectedValue);
-
-            // Update the user interface
-            Context.Menu.Create();
-            this.CmbKbdColorPreset.DataSource = null;
-            UpdateKbd();
-
-            // Save the configuration
-            Config.Save();
-
+            string name = (string) this.CmbKbdColorPreset.SelectedValue;
+            if(MessageBox.Show(this, "Delete preset: " + name + "?", "Keyboard",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) == DialogResult.Yes) {
+                Config.ColorPreset.Remove(name);
+                Context.Menu.Create();
+                this.CmbKbdColorPreset.DataSource = null;
+                UpdateKbd();
+                Config.Save();
+            }
         }
 
-        // Saves a color preset
         private void EventActionColorPresetSet(object sender, EventArgs e) {
             string name;
-
-            // Ask for a name
             if((name = Gui.ShowPromptInputText(
                 Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_KBD + "ColorPresetAdd"),
                 Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_KBD + "ColorPresetAddValueDefault"),
                 this)) != "")
-
-                // Save the preset (possibly overwriting it)
                 Config.ColorPreset[name] = new BiosData.ColorTable(Kbd.GetColors(), true);
 
-            // Update the user interface
             Context.Menu.Create();
             this.CmbKbdColorPreset.DataSource = null;
             UpdateKbd();
-
-            // Save the configuration
             Config.Save();
-
         }
 
-        // Handles the fan settings button being clicked
         private void EventActionFanSet(object sender, EventArgs e) {
-
-            // Query fan state
-            bool isFanMax = Context.Op.Platform.Fans.GetMax();
-            bool isFanOff = Context.Op.Platform.Fans.GetOff();
-
-            // Enable fan program
-            if(this.RdoFanProg.Checked) {
-
-                if(this.CmbFanProg.SelectedValue != null
-                    && (string) this.CmbFanProg.SelectedValue != ""
-                    && Config.FanProgram.ContainsKey(
-                        (string) this.CmbFanProg.SelectedValue)) {
-
-                    if(isFanOff) // Re-enable fan if off first
-                        Context.Op.Platform.Fans.SetOff(false);
-
-                    if(isFanMax) // Disable maximum speed first
-                        Context.Op.Platform.Fans.SetMax(false);
-
-                    // Start the selected program
-                    Context.Op.Program.Run((string) this.CmbFanProg.SelectedValue);
-
-                    // Reset the program update counter
-                    Context.UpdateProgramTick = 1;
-
-                } else {
-
-                    MessageBox.Show(
-                        this, // Modal
-                        Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_FAN + "ProgSetNoSel"),
-                        Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_FAN + "ProgSet"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Exclamation);
-
-                }
-
-            // Switch off the fan
-            } else if(this.RdoFanOff.Checked) {
-
-                // Terminate any running fan program
-                Context.Op.Program.Terminate();
-
-                if(!isFanOff) { // Skip if already off
-
-                    if(isFanMax) // Disable maximum speed first
-                        Context.Op.Platform.Fans.SetMax(false);
-
-                    // Switch off the fan
-                    Context.Op.Platform.Fans.SetOff(true);
-
-                }
-
-            // Set fan to maximum speed
-            } else if(this.RdoFanMax.Checked) {
-
-                // Terminate any running fan program
-                Context.Op.Program.Terminate();
-
-                if(!isFanMax) { // Skip if already maximum speed
-
-                     if(isFanOff) // Re-enable fan if off first
-                         Context.Op.Platform.Fans.SetOff(false);
-
-                     // Set the fan to maximum speed
-                     Context.Op.FanMaxSet(true);
-
-                }
-
-            // Enable fan constant speed
-            } else if(this.RdoFanConst.Checked) {
-
-                // Terminate any running fan program
-                Context.Op.Program.Terminate();
-
-                // The BIOS mandates that at least one fan
-                // be left running at any given time, so if the user
-                // wants both of them off, we use another way to do so
-                if(this.TrkFan0Lvl.Value == this.TrkFan0Lvl.Minimum
-                    && this.TrkFan1Lvl.Value == this.TrkFan1Lvl.Minimum) {
-
-                    // Switch the fans off
-                    if(!isFanOff) // If not already off
-                        Context.Op.Platform.Fans.SetOff(true);
-
-                // Conversely, if the user wants maximum speed setting
-                // for both fans, we just set it explicitly instead
-                } else if(this.TrkFan0Lvl.Value == this.TrkFan0Lvl.Maximum
-                    && this.TrkFan1Lvl.Value == this.TrkFan1Lvl.Maximum) {
-
-                    // Set the fans to maximum speed
-                    if(!isFanMax) // If not already at maximum speed
-                        Context.Op.FanMaxSet(true);
-
-                // Otherwise, we just set the speed levels normally
-                } else {
-
-                    if(isFanMax) // Disable maximum speed first
-                        Context.Op.Platform.Fans.SetMax(false);
-		    
-                    if(isFanOff) // Re-enable fan if off first
-                        Context.Op.Platform.Fans.SetOff(false);
-
-                    // Set each fan to the user-selected level
-                    // or to zero, if the minimum value is selected
-                    Context.Op.Platform.Fans.SetLevels(new byte[] {
-                        this.TrkFan0Lvl.Value == this.TrkFan0Lvl.Minimum ? (byte) 0 : (byte) this.TrkFan0Lvl.Value,
-                        this.TrkFan1Lvl.Value == this.TrkFan1Lvl.Minimum ? (byte) 0 : (byte) this.TrkFan1Lvl.Value});
-                    // Note: this won't work for setting both fans to zero
-                    // but that case will have already been handled at this point
-
-                    // Reset the fan mode so that the settings are applied
-                    Context.Op.Platform.Fans.SetMode(
-                        Context.Op.Platform.Fans.GetMode());
-
-                }
-
-            // Enable automatic fan mode (default)
-            } else if(this.RdoFanAuto.Checked) {
-
-                // Terminate any running fan program
-                Context.Op.Program.Terminate();
-
-                // Query the current and requested mode
-                BiosData.FanMode fanModeNow = Context.Op.Platform.Fans.GetMode();
-                BiosData.FanMode fanModeAsk = (BiosData.FanMode) Enum.Parse(
-                    typeof(BiosData.FanMode), 
-                    (string) this.CmbFanMode.SelectedValue);
-
-                if(isFanOff) // Re-enable fan if off first
-                    Context.Op.Platform.Fans.SetOff(false);
-
-                if(isFanMax) // Disable maximum speed first
-                    Context.Op.Platform.Fans.SetMax(false);
-
-                // Set the levels to 0xFF to clear any custom speed settings
-                Context.Op.Platform.Fans.SetLevels(new byte[] {Byte.MaxValue, Byte.MaxValue});
-
-                // Enable automatic fan in the selected mode
-                Context.Op.Platform.Fans.SetMode(fanModeAsk);
-
-            }
-
-            // Restore the default button look
-            this.BtnFanSet.Checked = false;
-
-        }
-
-        // Opens the fan curve editor for the currently-selected program
-        private void EventActionFanProgEdit(object sender, EventArgs e) {
-
-            if(this.CmbFanProg.SelectedValue == null
-                || (string) this.CmbFanProg.SelectedValue == ""
-                || !Config.FanProgram.ContainsKey((string) this.CmbFanProg.SelectedValue))
+            FanPlan plan = this.CmbFanPlan.SelectedItem as FanPlan;
+            if(plan == null)
                 return;
 
-            using(GuiFormFanCurve form = new GuiFormFanCurve((string) this.CmbFanProg.SelectedValue)) {
-                if(form.ShowDialog(this) == DialogResult.OK) {
-                    SetupFanCtl();
-                    this.CmbFanProg.SelectedValue = form.ProgramName;
-                    Context.Menu.Create();
-                    Config.Save();
-                }
-            }
-
+            ApplyFanPlan(plan);
         }
 
-        // Handles the help button being clicked
+        private void EventActionFanProgEdit(object sender, EventArgs e) {
+            string programName = null;
+            if(this.CmbFanPlan.SelectedItem is FanPlan plan && plan.Kind == FanPlanKind.Curve)
+                programName = plan.Name;
+            else if(Config.FanProgram.Count > 0)
+                programName = Config.FanProgram.Keys[0];
+
+            if(programName == null)
+                return;
+
+            using(GuiFormFanCurve form = new GuiFormFanCurve(programName)) {
+                if(form.ShowDialog(this) == DialogResult.OK) {
+                    SetupFanCtl();
+                    SelectFanPlan(FanPlanKind.Curve, form.ProgramName);
+                    Context.Menu.Create();
+                    Config.Save();
+                    this.Log.Info("Fan plan list refreshed after curve manager.");
+                }
+            }
+        }
+
+        private void EventActionCpuApply(object sender, EventArgs e) {
+            string plan = this.CmbCpuPlan.SelectedItem as string;
+            this.Log.OperationBegin("Apply CPU Plan: " + plan);
+            this.Log.Warn("CPU power plan is UI-only for now. No CPU PL1/PL4 BIOS write was sent; safe values need model confirmation.");
+            SetLastOperation(true, "CPU 方案 " + plan + " 未写入硬件 (TODO)", "CPU: " + plan);
+            this.LblCpuPlanState.Text = "当前: " + plan + " (未写入)";
+        }
+
+        private void EventActionGpuApply(object sender, EventArgs e) {
+            GpuPlanItem item = this.CmbGpuPlan.SelectedItem as GpuPlanItem;
+            if(item == null)
+                return;
+
+            this.Log.OperationBegin("Apply GPU Plan: " + item.Text);
+            try {
+                BiosData.GpuPowerData data = new BiosData.GpuPowerData(item.Level);
+                this.Log.Info("SetGpuPower(" + item.Level.ToString() + ")");
+                Context.Op.Platform.System.SetGpuPower(data);
+                BiosData.GpuPowerData readback = Context.Op.Platform.System.GetGpuPower(true);
+                string readbackText = GetGpuPowerReadback(readback);
+                this.Log.OperationResult(true, readbackText);
+                SetLastOperation(true, "GPU 方案 " + item.Text + " 已应用", readbackText);
+                this.LblGpuPlanState.Text = "当前: " + item.Text;
+            } catch(Exception ex) {
+                this.Log.OperationResult(false, ex.Message);
+                SetLastOperation(false, "GPU 方案应用失败", ex.Message);
+            }
+            UpdateSys();
+        }
+
         private void EventActionHelp(object sender, EventArgs e) {
-
-            // Show the About dialog
             GuiOp.About();
-
-            // Cancel the help cursor
             ((System.ComponentModel.CancelEventArgs) e).Cancel = true;
- 
+        }
+
+        private void EventActionLogClear(object sender, EventArgs e) {
+            this.Log.Clear();
+        }
+
+        private void EventActionLogCopy(object sender, EventArgs e) {
+            this.Log.Copy();
+        }
+
+        private void EventActionLogExport(object sender, EventArgs e) {
+            using(SaveFileDialog dialog = new SaveFileDialog()) {
+                dialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
+                dialog.FileName = "OmenMon-log-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt";
+                if(dialog.ShowDialog(this) == DialogResult.OK)
+                    File.WriteAllText(dialog.FileName, this.Log.Text);
+            }
         }
 #endregion
 
 #region Events
-        // Handles the event of a color parameter being input into the text box
         private void EventColorInput(object sender, EventArgs e) {
+            if(Kbd == null)
+                return;
             try {
                 Kbd.SetColors(new BiosData.ColorTable(this.TxtKbdColorVal.Text));
                 this.TxtKbdColorVal.ForeColor = Color.Empty;
@@ -423,406 +237,205 @@ namespace OmenMon.AppGui {
             }
         }
 
-        // Handles the event of a color zone being clicked
         private void EventColorPick(object sender, MouseEventArgs e) {
-
-            // No action if backlight off or no support
             if(Kbd == null || !Kbd.GetBacklight())
                 return;
 
-            // Determine the clicked zone from co-ordinates
-            // while also setting the dialog title in one go
             this.ColorPicker.Title = Config.Locale.Get(Config.L_GUI_MAIN + "KbdColorPick" + Kbd.SetZone(e.X, e.Y).ToString());
-            
-            // Set the start color to the current color
             this.ColorPicker.Color = Color.FromArgb(Kbd.GetColor());
-
-            // Update the current backlight color in the custom colors
             this.ColorPicker.CustomColors = Kbd.UpdateColorPicker(this.ColorPicker.CustomColors);
-
-            // Show the dialog
             this.ColorPicker.ShowDialog();
-
-            // Note: Color is updated in real time,
-            // so there is nothing more to check here
-
         }
 
-        // Handles the event of a color preset being selected from a drop-down list
         private void EventColorPreset(object sender, EventArgs e) {
-
-            // Apply the new color preset
-            Context.FormMain.Kbd.SetColors(
-                Config.ColorPreset[(string) ((ComboBox) sender).SelectedValue]);
-
-            // Update the parameter textbox
+            if(Kbd == null || ((ComboBox) sender).SelectedValue == null)
+                return;
+            Context.FormMain.Kbd.SetColors(Config.ColorPreset[(string) ((ComboBox) sender).SelectedValue]);
             this.TxtKbdColorVal.Text = Kbd.GetParam();
-
         }
 
-        // Handles the event when the form is about to be closed
         private void EventFormClosing(object sender, FormClosingEventArgs e) {
-
-            // If the reason is user request
-            if (e.CloseReason == CloseReason.UserClosing) {
-
-                // Cancel the application closure
-                // and hide the window instead
+            if(e.CloseReason == CloseReason.UserClosing) {
                 e.Cancel = true;
                 this.Hide();
-
             }
-
         }
 
-        // Handles the event when the fan mode list has been interacted with
-        private void EventFanModeChanged(object sender, EventArgs e) {
-
-            // Highlight the Set button to remind
-            // the user of a pending unapplied change
+        private void EventFanPlanChanged(object sender, EventArgs e) {
             this.BtnFanSet.Checked = true;
-
-            // Switch the selected radio button to Auto
-            this.RdoFanAuto.Checked = true;
-
+            this.LblFanPlanState.Text = "未应用更改: " + this.CmbFanPlan.Text;
+            bool fixedPlan = (this.CmbFanPlan.SelectedItem as FanPlan)?.Kind == FanPlanKind.Fixed;
+            this.TrkFan0Lvl.Enabled = fixedPlan;
+            this.TrkFan1Lvl.Enabled = fixedPlan;
         }
 
-        // Handles the event when the fan program list has been interacted with
-        private void EventFanProgramChanged(object sender, EventArgs e) {
-
-            // Highlight the Set button to remind
-            // the user of a pending unapplied change
-            this.BtnFanSet.Checked = true;
-
-            // Switch the selected radio button to Program
-            this.RdoFanProg.Checked = true;
-
+        private void EventCpuPlanChanged(object sender, EventArgs e) {
+            this.LblCpuPlanState.Text = "未应用更改: " + this.CmbCpuPlan.Text;
         }
 
-        // Handles the event when the fan radio button has been selected or deselected
-        private void EventFanRdoChanged(object sender, EventArgs e) {
-
-            if(((Control) sender).Name ==  Gui.T_RDO + Gui.G_FAN + "Const")
-
-                // If the radio button is set to constant speed,
-                // unlock the trackbars so that the speed can be set
-                if(((RadioButton) sender).Checked) {
-                    this.TrkFan0Lvl.Enabled = true;
-                    this.TrkFan1Lvl.Enabled = true;
-	        
-                // The trackbars are locked in any other situation
-                } else {
-                    this.TrkFan0Lvl.Enabled = false;
-                    this.TrkFan1Lvl.Enabled = false;
-                }
-
-            // Highlight the Set button to remind
-            // the user of a pending unapplied change
-            this.BtnFanSet.Checked = true;
-
+        private void EventGpuPlanChanged(object sender, EventArgs e) {
+            this.LblGpuPlanState.Text = "未应用更改: " + this.CmbGpuPlan.Text;
         }
 
-        // Handles the event when the fan radio button has been selected or deselected
         private void EventFanTrkChanged(object sender, EventArgs e) {
-
-            // Only if the trackbar is enabled
-            // for constant fan speed mode setting
-            if(((Control) sender).Enabled)
+            if(((Control) sender).Enabled) {
+                TrackBar changed = (TrackBar) sender;
+                TrackBar other = changed == this.TrkFan0Lvl ? this.TrkFan1Lvl : this.TrkFan0Lvl;
+                if(other.Value != changed.Value)
+                    other.Value = changed.Value;
+                if(this.CmbFanPlan.SelectedItem is FanPlan plan && plan.Kind == FanPlanKind.Fixed)
+                    plan.FixedLevel = (byte) changed.Value;
                 this.BtnFanSet.Checked = true;
-
+                this.LblFanPlanState.Text = "未应用更改: 定速 " + changed.Value.ToString();
+            }
         }
 
-        // Handles the event when the form visibility changes
         private void EventFormVisibleChanged(object sender, EventArgs e) {
-
-            // Reset the update counter,
-            // the form is always updated immediately as it opens
             Context.UpdateMonitorTick = 0;
-
-            // Update everything
             if(this.Visible)
                 UpdateAll();
-
         }
 #endregion
 
 #region Setup
-        // Set up the fan control combo boxes
         public void SetupFanCtl() {
 
-            // Trackbars are disabled by default, until
-            // constant-speed mode is explicitly enabled
+            this.CmbFanPlan.BeginUpdate();
+            this.CmbFanPlan.DataSource = null;
+            this.FanPlans.Clear();
+
+            foreach(string name in Config.FanProgram.Keys)
+                this.FanPlans.Add(new FanPlan(name, FanPlanKind.Curve, "曲线"));
+
+            foreach(BiosData.FanMode mode in GetSupportedFirmwareFanModes())
+                this.FanPlans.Add(new FanPlan(
+                    GetFirmwarePlanName(mode),
+                    FanPlanKind.Firmware,
+                    "固件",
+                    mode));
+            this.FanPlans.Add(new FanPlan("定速", FanPlanKind.Fixed, "固定", null, (byte) Config.FanLevelMin));
+            this.FanPlans.Add(new FanPlan("最大风扇", FanPlanKind.Max, "特殊"));
+
+            this.CmbFanPlan.DataSource = this.FanPlans;
+            this.CmbFanPlan.EndUpdate();
+
+            this.CmbCpuPlan.Items.Clear();
+            this.CmbCpuPlan.Items.AddRange(new object[] { "默认", "低功耗", "平衡", "性能" });
+            this.CmbCpuPlan.SelectedIndex = 0;
+
+            this.CmbGpuPlan.Items.Clear();
+            this.CmbGpuPlan.Items.Add(new GpuPlanItem("基础功耗", BiosData.GpuPowerLevel.Minimum));
+            this.CmbGpuPlan.Items.Add(new GpuPlanItem("增强功耗", BiosData.GpuPowerLevel.Medium));
+            this.CmbGpuPlan.Items.Add(new GpuPlanItem("增强功耗 + Boost", BiosData.GpuPowerLevel.Maximum));
+            this.CmbGpuPlan.SelectedIndex = 0;
+
             this.TrkFan0Lvl.Enabled = false;
             this.TrkFan1Lvl.Enabled = false;
 
-            // Clear the fan mode list
-            this.CmbFanMode.BeginUpdate();
-            this.CmbFanMode.DataSource = null;
-            FanModes.Clear();
-
-            // Populate the fan mode list
-            // The most useful modes are on top,
-            // the rest (legacy modes) is sorted alphabetically
-            List<string> fanModes = Config.FanModesSticky;
-            string[] fanModesMore = Enum.GetNames(typeof(BiosData.FanMode));
-            Array.Sort(fanModesMore);
-            fanModes.AddRange(fanModesMore);
-            foreach(string name in new HashSet<string>(fanModes))
-                FanModes.Add(new {
-                    Text = Config.Locale.Get(Config.L_GUI_MENU + Gui.M_ACT + Gui.G_FAN + "Mode" + name),
-                    Value = name });
-            this.CmbFanMode.DataSource = FanModes;
-            this.CmbFanMode.DisplayMember = "Text";
-            this.CmbFanMode.ValueMember = "Value";
-            this.CmbFanMode.EndUpdate();
-
-            // Clear the fan mode list
-            this.CmbFanProg.BeginUpdate();
-            this.CmbFanProg.DataSource = null;
-            FanPrograms.Clear();
-
-            // Populate the fan program list
-            foreach(string name in Config.FanProgram.Keys)
-                FanPrograms.Add( new { Text = GetFanProgramText(name), Value = name } );
-            if(FanPrograms.Count > 0)
-               this.CmbFanProg.DataSource = FanPrograms;
-            this.CmbFanProg.DisplayMember = "Text";
-            this.CmbFanProg.ValueMember = "Value";
-            this.CmbFanProg.EndUpdate();
-
         }
 
-        // Gets a short user-facing description for a fan program
-        private string GetFanProgramText(string name) {
-
-            string description = Config.Locale.Get(Config.L_PROG + "Desc" + name);
-            return description == Config.L_PROG + "Desc" + name ?
-                name : name + " - " + description;
-
+        private void SelectFanPlan(FanPlanKind kind, string name) {
+            foreach(FanPlan plan in this.FanPlans)
+                if(plan.Kind == kind && plan.Name == name) {
+                    this.CmbFanPlan.SelectedItem = plan;
+                    return;
+                }
         }
 
-        // Set up the system information group
         public void SetupSys() {
-
-            // Set both system information and status to empty
             this.SysInfo = "";
             this.SysStatus = "";
-
-            // Apply the update
-            this.UpdateSysRtf();
-
+            UpdateSysRtf();
         }
 
-        // Set up the temperature readout description (only has to be done once)
         public void SetupTmp() {
-
-            // Iterate through all temperature sensor and initialize each
-            for(int i = 0; i < Context.Op.Platform.Temperature.Length; i++)
-                SetupTmpItem(i);
-
-        }
-
-        // Set up the description of an item within the temperature group
-        public void SetupTmpItem(int index) {
-
-            // Retrieve caption candidates
-            string indexString = index.ToString();
-            string captionOriginal = Context.Op.Platform.Temperature[index].GetName();
-            string captionLocaleId = Config.L_GUI_MAIN + Gui.G_TMP + captionOriginal;
-            string captionLocalized = Config.Locale.Get(captionLocaleId);
-
-            // Locate the pertinent caption label
-            Label label = ((Label) this.GrpTmp.Controls.Find(
-                Gui.T_LBL + Gui.G_TMP + indexString + Gui.S_CAP, false)[0]);
-
-            // Also locate the value label
-            Label labelValue =
-                ((Label) this.GrpTmp.Controls[this.GrpTmp.Controls.IndexOf(label) + 1]);
-
-            // Strike-through sensors set not to be used
-            if(!Context.Op.Platform.TemperatureUse[index])
-                label.Font = new Font(label.Font, FontStyle.Strikeout);
-
-            // Determine the best caption and apply it
-            label.Text = captionLocalized == captionLocaleId ?
-                captionOriginal : captionLocalized;
-
-            // Check if a specific localized tooltip is available,
-            // and set it; otherwise use the default fallback tooltip
-            string toolTipLocaleId = Config.L_GUI_TIP + Gui.G_TMP + captionOriginal;
-            string toolTipLocalized = Config.Locale.Get(toolTipLocaleId);
-            string toolTip = toolTipLocalized != toolTipLocaleId ?
-                toolTipLocalized : Config.Locale.Get(Config.L_GUI_TIP + Gui.G_TMP + "Unknown");
-
-            this.Tip.SetToolTip(label, toolTip);
-            this.Tip.SetToolTip(labelValue, toolTip);
-
         }
 #endregion
 
 #region Updates
-        // Updates all of the form
         public void UpdateAll() {
-
-            // Update form dimensions following a scaling change
             UpdateDpi(this.LastDpi);
-
-            // Update the fan group monitoring section
             UpdateFan();
-
-            // Update the fan group controls section
             UpdateFanCtl();
-
-            // Update the keyboard group
             UpdateKbd();
-
-            // Update the system status group
             UpdateSys();
-
-            // Update the temperature group
             UpdateTmp();
-
         }
 
-        // Updates the form dimensions following a scaling change
         private void UpdateDpi(int dpi) {
-
-            // Skip if configured not to resize
             if(Config.GuiDpiChangeResize) {
-
-                // Suspend the layout
                 this.SuspendLayout();
                 this.AutoSize = false;
-
-                // Adjust the client size to account for differences
-                // if the form gets scaled dynamically to another DPI setting
                 this.Size = new Size(
-                    (int) (1080 + ((dpi - 96) * Config.DpiSizeAdjFactorX / 100)),
-                    (int) (441 + ((dpi - 96) * Config.DpiSizeAdjFactorY / 100)));
-
-                // Resume the layout
+                    (int) (930 + ((dpi - 96) * Config.DpiSizeAdjFactorX / 100)),
+                    (int) (558 + ((dpi - 96) * Config.DpiSizeAdjFactorY / 100)));
                 this.AutoSize = true;
                 this.ResumeLayout(false);
-
-                // Update the last DPI value for the next rescaling
                 this.LastDpi = dpi;
-
             }
-
         }
 
-        // Updates the fan group monitoring section
         public void UpdateFan() {
-
-            // Update the platform fan readings
-            Context.Op.Platform.UpdateFans();
-
-            // Update the fan speed [rpm]
             try {
-                this.LblFan0Val.Text = Context.Op.Platform.Fans.Fan[0].GetSpeed().ToString(Config.FormatFanSpeed);
-                this.LblFan1Val.Text = Context.Op.Platform.Fans.Fan[1].GetSpeed().ToString(Config.FormatFanSpeed);
-            } catch { }
-
-            // Update the fan level [krpm]
-            // Hold if the controls are not unlocked for the user to set the speed manually
-            try {
+                Context.Op.Platform.UpdateFans();
+                int level0 = Context.Op.Platform.Fans.Fan[0].GetLevel();
+                int level1 = Context.Op.Platform.Fans.Fan[1].GetLevel();
                 if(!this.TrkFan0Lvl.Enabled)
-                    this.TrkFan0Lvl.Value = Conv.GetConstrained(
-                        Context.Op.Platform.Fans.Fan[0].GetLevel(), this.TrkFan0Lvl.Minimum, this.TrkFan1Lvl.Maximum);
+                    this.TrkFan0Lvl.Value = Conv.GetConstrained(level0, this.TrkFan0Lvl.Minimum, this.TrkFan0Lvl.Maximum);
                 if(!this.TrkFan1Lvl.Enabled)
-                    this.TrkFan1Lvl.Value = Conv.GetConstrained(
-                        Context.Op.Platform.Fans.Fan[1].GetLevel(), this.TrkFan1Lvl.Minimum, this.TrkFan1Lvl.Maximum);
-            } catch { }
+                    this.TrkFan1Lvl.Value = Conv.GetConstrained(level1, this.TrkFan1Lvl.Minimum, this.TrkFan1Lvl.Maximum);
+                this.LblFan0Val.Text = level0.ToString();
+                this.LblFan1Val.Text = level1.ToString();
 
-            // Update the fan rate [%]
+                try {
+                    int rpm0 = Context.Op.Platform.Fans.Fan[0].GetSpeed();
+                    int rpm1 = Context.Op.Platform.Fans.Fan[1].GetSpeed();
+                    if((level0 > 0 && rpm0 == 0) || (level1 > 0 && rpm1 == 0))
+                        this.LblFanPlanState.Text = "提示: 读数可能不受该机型支持";
+                } catch(Exception ex) {
+                    this.Log.Warn("Fan RPM readback unavailable: " + ex.Message);
+                }
+            } catch(Exception ex) {
+                this.Log.Warn("Fan level readback unavailable: " + ex.Message);
+            }
+        }
+
+        public void UpdateFanCtl() {
             try {
-                this.BarFan0Rte.Value = Context.Op.Platform.Fans.Fan[0].GetRate();
-                this.BarFan1Rte.Value = Context.Op.Platform.Fans.Fan[1].GetRate();
-                this.LblFan0Rte.Text = this.BarFan0Rte.Value.ToString();
-                this.LblFan1Rte.Text = this.BarFan1Rte.Value.ToString();
-            } catch { }
-
-            // Show the countdown, if applicable
-            int countdown = Context.Op.Platform.Fans.GetCountdown();
-            this.LblFanCountdown.Text = countdown > 0 ?
-                countdown.ToString() + Config.Locale.Get(Config.L_UNIT + "TimeSecond" + Config.LS_CUSTOM_FONT) : "";
-
-            // In constant-speed mode, keep resetting the countdown, while also reapplying the current mode
-            if(this.RdoFanConst.Checked == true && countdown < Config.UpdateMonitorInterval + Config.FanCountdownExtendThreshold) {
-                Context.Op.Platform.Fans.SetMode(Context.Op.Platform.Fans.GetMode());
-                Context.Op.Platform.Fans.SetCountdown(Config.FanCountdownExtendInterval);
+                if(Context.Op.Program.IsEnabled)
+                    SelectFanPlan(FanPlanKind.Curve, Context.Op.Program.GetName());
+                else if(Context.Op.Platform.Fans.GetMax())
+                    SelectFanPlan(FanPlanKind.Max, "最大风扇");
+                else {
+                    BiosData.FanMode mode = Context.Op.Platform.Fans.GetMode();
+                    if(mode == BiosData.FanMode.Default)
+                        SelectFanPlan(FanPlanKind.Firmware, "固件 默认");
+                    else if(mode == BiosData.FanMode.Performance)
+                        SelectFanPlan(FanPlanKind.Firmware, "固件 性能");
+                    else if(mode == BiosData.FanMode.Cool)
+                        SelectFanPlan(FanPlanKind.Firmware, "固件 清凉");
+                }
+            } catch(Exception ex) {
+                this.Log.Warn("Fan control state readback unavailable: " + ex.Message);
             }
 
-            // Update the current fan mode
-            // Hold if the Set button is already highlighted or the list is currently open
-            if(!this.BtnFanSet.Checked && !this.CmbFanMode.DroppedDown)
-            try {
-                this.CmbFanMode.SelectedValue = Enum.GetName(typeof(BiosData.FanMode), Context.Op.Platform.Fans.GetMode());
-            } catch { }
-
-            // Update the current fan program
-            // Hold if the Set button is already highlighted or the list is currently open
-            if(!this.BtnFanSet.Checked && !this.CmbFanProg.DroppedDown)
-            try {
-                this.CmbFanProg.SelectedValue = Context.Op.Program.GetName();
-            } catch { }
-
-
-        }
-
-        // Updates the fan group controls section
-        public void UpdateFanCtl() {
-
-            // Query and retrieve fan control state
-            bool isFanMax = Context.Op.Platform.Fans.GetMax();
-            bool isFanOff = Context.Op.Platform.Fans.GetOff();
-
-            // Fan program is active if a flag to that effect is set
-            // This takes precedence over all the other queries
-            if(Context.Op.Program.IsEnabled)
-                this.RdoFanProg.Checked = true;
-
-            // If the fan is switched off, the setting should reflect that
-            else if(isFanOff)
-                this.RdoFanOff.Checked = true;
-
-            // If the fan is set to maximum mode, the setting should reflect that
-            else if(isFanMax)
-                this.RdoFanMax.Checked = true;
-
-            // If trackbars are unlocked, we are in constant fan speed mode
-            else if(this.TrkFan0Lvl.Enabled)
-                this.RdoFanConst.Checked = true;
-
-            // If none of the above, the fan is in the default automatic state
-            else
-                this.RdoFanAuto.Checked = true;
-
-            // Restore the Set button default look
             this.BtnFanSet.Checked = false;
-
+            this.LblFanPlanState.Text = "当前: " + this.CmbFanPlan.Text;
         }
 
-        // Updates the keyboard group
         public void UpdateKbd() {
-
-            // Restore the default color of the color as parameter text box
             this.TxtKbdColorVal.ForeColor = Color.Empty;
 
-            // Disable the backlight toggle for unsupported devices,
-            // otherwise update the keyboard backlight status
             if(!Context.Op.Platform.System.GetKbdBacklightSupport()) {
                 this.ChkKbdBacklight.Checked = false;
                 this.ChkKbdBacklight.Enabled = false;
-            } else if(Kbd != null) // Use the keyboard class
+            } else if(Kbd != null)
                 this.ChkKbdBacklight.Checked = Kbd.GetBacklight();
-            else // Fallback case for no customizable backlight color
+            else
                 this.ChkKbdBacklight.Checked =
-                    Context.Op.Platform.System.GetKbdBacklight() == BiosData.Backlight.On ? true : false;
+                    Context.Op.Platform.System.GetKbdBacklight() == BiosData.Backlight.On;
 
-            // Disable the interface when backlight is off or no support
             if(Kbd == null || !Kbd.GetBacklight()) {
-
                 this.CmbKbdColorPreset.DataSource = null;
                 this.CmbKbdColorPreset.Enabled = false;
                 this.TxtKbdColorVal.Enabled = false;
@@ -830,16 +443,15 @@ namespace OmenMon.AppGui {
                 this.BtnKbdColorPresetDel.Enabled = false;
                 this.BtnKbdColorPresetSet.Enabled = false;
                 this.PicKbd.Cursor = Cursors.Default;
-
             } else {
-
-                // Enable the interface when backlight is on
                 this.CmbKbdColorPreset.BeginUpdate();
-                ColorPresets.Clear();
+                this.ColorPresets.Clear();
                 foreach(string name in Config.ColorPreset.Keys)
-                    ColorPresets.Add( new { Text = name.StartsWith(Config.ColorPresetDefaultPrefix) ?
-                        Config.Locale.Get(Config.L_GUI_MENU + Gui.M_ACT + Gui.G_KBD + "ColorPreset" + name) : name, Value = name } );
-                this.CmbKbdColorPreset.DataSource = ColorPresets;
+                    this.ColorPresets.Add(new {
+                        Text = name.StartsWith(Config.ColorPresetDefaultPrefix) ?
+                            Config.Locale.Get(Config.L_GUI_MENU + Gui.M_ACT + Gui.G_KBD + "ColorPreset" + name) : name,
+                        Value = name });
+                this.CmbKbdColorPreset.DataSource = this.ColorPresets;
                 this.CmbKbdColorPreset.DisplayMember = "Text";
                 this.CmbKbdColorPreset.ValueMember = "Value";
                 this.CmbKbdColorPreset.SelectedValue = Kbd.GetPreset();
@@ -850,122 +462,270 @@ namespace OmenMon.AppGui {
                 this.BtnKbdColorPresetDel.Enabled = true;
                 this.BtnKbdColorPresetSet.Enabled = true;
                 this.PicKbd.Cursor = Cursors.Hand;
-
             }
-
         }
 
-        // Keeps updating the color as it changes in the Color Picker dialog
         public void UpdateKbdCallback(int color) {
             Kbd.SetColor(ColorTranslator.FromWin32(color).ToArgb());
             this.TxtKbdColorVal.Text = Kbd.GetParam();
             this.CmbKbdColorPreset.SelectedValue = Kbd.GetPreset();
         }
 
-        // Update the system information while preserving the status message
         public void UpdateSys() {
+            try {
+                Context.Op.Platform.UpdateSystem();
+                this.SysInfo =
+                    "机型: " + Context.Op.Platform.System.GetManufacturer() + " "
+                    + Context.Op.Platform.System.GetProduct() + " "
+                    + Context.Op.Platform.System.GetVersion() + Environment.NewLine
+                    + "Born/BIOS: " + Context.Op.Platform.System.GetBornDate()
+                    + "  主板: " + Context.Op.Platform.System.GetProduct() + Environment.NewLine
+                    + "电源: " + (Context.Op.Platform.System.IsFullPower() ? "AC" : "电池")
+                    + "  适配器: " + SafeGetAdapter()
+                    + "  默认PL4: " + SafeGetDefaultCpuPowerLimit4() + "W" + Environment.NewLine
+                    + "固件能力: " + GetFirmwareSupportSummary() + Environment.NewLine
+                    + "当前风扇方案: " + this.CmbFanPlan.Text + Environment.NewLine
+                    + "当前 CPU 方案: " + this.LblCpuPlanState.Text.Replace("当前: ", "") + Environment.NewLine
+                    + "当前 GPU 方案: " + this.LblGpuPlanState.Text.Replace("当前: ", "") + Environment.NewLine
+                    + GetTemperatureSummary() + Environment.NewLine
+                    + this.LastOperationStatus + Environment.NewLine;
+            } catch(Exception ex) {
+                this.SysInfo = "系统状态读取失败: " + ex.Message + Environment.NewLine;
+                this.Log.Warn("System readback unavailable: " + ex.Message);
+            }
 
-            // Update the platform system information
-            Context.Op.Platform.UpdateSystem();
-
-            // Update the system info string
-            this.SysInfo = ""
-                + Conv.RTF_CF6 + Context.Op.Platform.System.GetManufacturer() + " "
-                + Conv.RTF_CF5 + Context.Op.Platform.System.GetProduct() + " "
-                + Conv.RTF_CF1 + Context.Op.Platform.System.GetVersion() + " "
-                + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "Born") + " "
-                    + Context.Op.Platform.System.GetBornDate() + " "
-                + (Context.Op.Platform.System.GetDefaultCpuPowerLimit4() == 0 ? ""
-                    : Conv.RTF_CF5 + Context.Op.Platform.System.GetDefaultCpuPowerLimit4().ToString()
-                    + Conv.RTF_CF1 + Config.Locale.Get(Config.L_UNIT + "Power") + " ")
-                + Conv.RTF_CF1 + (Context.Op.Platform.System.IsFullPower() ?
-                    Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "Adapter"
-                        + Enum.GetName(typeof(BiosData.AdapterStatus),
-                            Context.Op.Platform.System.GetAdapterStatus()))
-                    : Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "AdapterBatteryPower"))
-                    + Conv.RTF_LINE
-                + Conv.RTF_CF1 + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "Gpu") + " " 
-                    + Conv.RTF_CF5 + Enum.GetName(typeof(BiosData.GpuMode), Context.Op.Platform.System.GetGpuMode(true)) + " "
-                + Conv.RTF_CF1 + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "GpuDState") + " "
-                    + Conv.RTF_CF5 + Enum.GetName(typeof(BiosData.GpuDState), Context.Op.Platform.System.GetGpuDState(true)) + " "
-                + (Context.Op.Platform.System.GetGpuCustomTgp() == BiosData.GpuCustomTgp.On ?
-                    Conv.RTF_CF6 + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "GpuCustomTgp")
-                    : Conv.RTF_CF1 + Conv.RTF_STRIKE1 + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "GpuCustomTgp") + Conv.RTF_STRIKE0) + " "
-                + (Context.Op.Platform.System.GetGpuPpab() == BiosData.GpuPpab.On ?
-                    Conv.RTF_CF6 + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "GpuPpab")
-                    : Conv.RTF_CF1 + Conv.RTF_STRIKE1 + Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS + "GpuPpab") + Conv.RTF_STRIKE0) + " "
-                + Conv.RTF_CF1 + Config.Locale.Get(
-                    Config.L_GUI_MAIN + Gui.G_SYS + "Throttling"
-                        + Enum.GetName(typeof(BiosData.Throttling),
-                    Context.Op.Platform.System.GetThrottling())) + Conv.RTF_LINE
-                + Conv.RTF_CF2;
-
-            // Apply the update
             UpdateSysRtf();
-
         }
 
-        // Update the system status message only
         public void UpdateSysMsg(string message = "") {
-
-            // Add timestamp if the message is not empty
             if(message != "")
-                message = message + Conv.RTF_CF1 + " @ " + DateTime.Now.ToString(Config.TimestampFormat);
-
-            // Set the status message
-            this.SysStatus = message;
-
-            // Apply the update
+                this.SysStatus = "状态: " + message + " @ " + DateTime.Now.ToString(Config.TimestampFormat);
             UpdateSysRtf();
-
         }
 
-        // Update the system status rich-text field
         private void UpdateSysRtf() {
-            this.RtfSysInfo.Rtf =
-                Config.SysInfoRtfHeader
-                + Conv.GetUnicodeStringRtf(this.SysInfo)
-                + Conv.GetUnicodeStringRtf(this.SysStatus)
-                + Config.SysInfoRtfFooter;
+            if(this.RtfSysInfo == null)
+                return;
+            this.RtfSysInfo.Text = this.SysInfo + this.SysStatus;
         }
 
-        // Updates the temperature group
         public void UpdateTmp() {
-
-            // Update the temperature readings
-            Context.Op.Platform.UpdateTemperature();
-
-            // Update the form data representation
-            for(int i = 0; i < Context.Op.Platform.Temperature.Length; i++)
-                UpdateTmpItem(i);
-
+            try {
+                Context.Op.Platform.UpdateTemperature();
+                UpdateSys();
+            } catch(Exception ex) {
+                this.Log.Warn("Temperature readback unavailable: " + ex.Message);
+            }
         }
 
-        // Updates an item within the temperature group
-        private void UpdateTmpItem(int index) {
-
-            // Prepare the data
-            string prefix = Gui.T_LBL + Gui.G_TMP + index.ToString();
-            int value = Context.Op.Platform.Temperature[index].GetValue();
-            PlatformData.ValueTrend valueTrend = Context.Op.Platform.Temperature[index].GetValueTrend();
-
-            // Locate the pertinent labels
-            Label labelCaption = ((Label) this.GrpTmp.Controls.Find(prefix + Gui.S_CAP, false)[0]);
-            Label labelValue = ((Label) this.GrpTmp.Controls[this.GrpTmp.Controls.IndexOf(labelCaption) + 1]);
-
-            // Update the status
-            labelCaption.Enabled = value > 0;
-
-            // Update the value
-            labelValue.Text = value == 0 ? "" :
-                value.ToString() + Config.Locale.Get(Config.L_UNIT + "Temperature" + Config.LS_CUSTOM_FONT)
-                + (valueTrend == PlatformData.ValueTrend.Unchanged ?
-                    Conv.GetChar(Conv.SpecialChar.SpaceEn) : valueTrend == PlatformData.ValueTrend.Ascending ?
-                        Conv.GetChar(Conv.SpecialChar.SupPlus) : Conv.GetChar(Conv.SpecialChar.SupMinus));
-
+        public void WriteLog(string message) {
+            if(this.Log != null)
+                this.Log.Info(message);
         }
 #endregion
- 
+
+#region Fan Operations
+        private void ApplyFanPlan(FanPlan plan) {
+
+            this.Log.OperationBegin("Apply FanPlan: " + plan.Name);
+            try {
+                switch(plan.Kind) {
+                    case FanPlanKind.Curve:
+                        this.Log.Info("Program.Run(\"" + plan.Name + "\")");
+                        if(Context.Op.Platform.Fans.GetOff()) {
+                            this.Log.Info("SetOff(false)");
+                            Context.Op.Platform.Fans.SetOff(false);
+                        }
+                        if(Context.Op.Platform.Fans.GetMax()) {
+                            this.Log.Info("SetMax(false)");
+                            Context.Op.Platform.Fans.SetMax(false);
+                        }
+                        if(!Context.Op.Program.Run(plan.Name))
+                            throw new InvalidOperationException("Program.Run returned false.");
+                        Context.UpdateProgramTick = 1;
+                        break;
+
+                    case FanPlanKind.Firmware:
+                        ApplyFirmwareFanPlan((BiosData.FanMode) plan.FirmwareMode);
+                        break;
+
+                    case FanPlanKind.Fixed:
+                        ApplyFixedFanPlan(plan.FixedLevel == null ? (byte) Config.FanLevelMin : (byte) plan.FixedLevel);
+                        break;
+
+                    case FanPlanKind.Max:
+                        this.Log.Info("Program.Terminate()");
+                        Context.Op.Program.Terminate();
+                        this.Log.Info("SetOff(false)");
+                        Context.Op.Platform.Fans.SetOff(false);
+                        this.Log.Info("SetMax(true)");
+                        Context.Op.FanMaxSet(true);
+                        break;
+                }
+
+                string readback = GetFanReadback();
+                this.Log.OperationResult(true, readback);
+                SetLastOperation(true, "风扇方案 " + plan.Name + " 已应用", readback);
+                this.BtnFanSet.Checked = false;
+                this.LblFanPlanState.Text = "当前: " + plan.ToString();
+            } catch(Exception ex) {
+                this.Log.OperationResult(false, ex.Message);
+                SetLastOperation(false, "风扇方案 " + plan.Name + " 应用失败", ex.Message);
+            }
+
+            UpdateFan();
+            UpdateSys();
+        }
+
+        private void ApplyFirmwareFanPlan(BiosData.FanMode mode) {
+            this.Log.Info("Program.Terminate()");
+            Context.Op.Program.Terminate();
+            this.Log.Info("SetOff(false)");
+            Context.Op.Platform.Fans.SetOff(false);
+            this.Log.Info("SetMax(false)");
+            Context.Op.Platform.Fans.SetMax(false);
+            this.Log.Info("SetLevels(255,255)");
+            Context.Op.Platform.Fans.SetLevels(new byte[] { Byte.MaxValue, Byte.MaxValue });
+            this.Log.Info("SetFanMode(" + mode.ToString() + ")");
+            Context.Op.Platform.Fans.SetMode(mode);
+        }
+
+        private void ApplyFixedFanPlan(byte level) {
+            level = (byte) Conv.GetConstrained(level, Config.FanLevelMin, Config.FanLevelMax);
+            this.Log.Info("Program.Terminate()");
+            Context.Op.Program.Terminate();
+            this.Log.Info("SetMax(false)");
+            Context.Op.Platform.Fans.SetMax(false);
+            this.Log.Info("SetOff(false)");
+            Context.Op.Platform.Fans.SetOff(false);
+            this.Log.Info("SetLevels(" + level.ToString() + "," + level.ToString() + ")");
+            Context.Op.Platform.Fans.SetLevels(new byte[] { level, level });
+            this.Log.Info("SetFanMode(GetMode())");
+            Context.Op.Platform.Fans.SetMode(Context.Op.Platform.Fans.GetMode());
+        }
+
+        private string GetFanReadback() {
+            BiosData.FanMode mode = Context.Op.Platform.Fans.GetMode();
+            bool fanMax = Context.Op.Platform.Fans.GetMax();
+            bool fanOff = Context.Op.Platform.Fans.GetOff();
+            byte[] levels = Context.Op.Platform.Fans.GetLevels();
+            return "HPCM=0x" + ((byte) mode).ToString("X2")
+                + ", FanMax=" + fanMax.ToString()
+                + ", FanOff=" + fanOff.ToString()
+                + ", FanLevel=" + levels[0].ToString() + "/" + levels[1].ToString();
+        }
+#endregion
+
+#region Helpers
+        private void SetLastOperation(bool success, string summary, string details) {
+            this.LastOperationStatus =
+                "最近操作: " + (success ? "成功" : "失败")
+                + " @ " + DateTime.Now.ToString(Config.TimestampFormat)
+                + "  " + summary
+                + "  读回: " + details;
+        }
+
+        private string GetTemperatureSummary() {
+            int cpu = GetTemperatureByName("CPUT");
+            int gpu = GetTemperatureByName("GPTM");
+            int tmax = Context.Op.Platform.GetMaxTemperature(false);
+            return "关键温度: CPU " + FormatTemperature(cpu)
+                + "  GPU " + FormatTemperature(gpu)
+                + "  Tmax " + FormatTemperature(tmax);
+        }
+
+        private int GetTemperatureByName(string name) {
+            for(int i = 0; i < Context.Op.Platform.Temperature.Length; i++)
+                if(Context.Op.Platform.Temperature[i].GetName() == name)
+                    return Context.Op.Platform.Temperature[i].GetValue();
+            return 0;
+        }
+
+        private string FormatTemperature(int value) {
+            return value <= 0 ? "-" : value.ToString() + "C";
+        }
+
+        private string SafeGetAdapter() {
+            try {
+                return Enum.GetName(typeof(BiosData.AdapterStatus), Context.Op.Platform.System.GetAdapterStatus());
+            } catch(Exception ex) {
+                this.Log.Warn("Adapter readback unavailable: " + ex.Message);
+                return "?";
+            }
+        }
+
+        private string SafeGetDefaultCpuPowerLimit4() {
+            try {
+                return Context.Op.Platform.System.GetDefaultCpuPowerLimit4().ToString();
+            } catch {
+                return "?";
+            }
+        }
+
+        private string GetGpuPowerReadback(BiosData.GpuPowerData data) {
+            return "CustomTgp=" + data.CustomTgp.ToString()
+                + ", Ppab=" + data.Ppab.ToString()
+                + ", DState=" + data.DState.ToString()
+                + ", PeakTemperature=" + data.PeakTemperature.ToString();
+        }
+
+        private List<BiosData.FanMode> GetSupportedFirmwareFanModes() {
+
+            List<BiosData.FanMode> modes = new List<BiosData.FanMode>();
+            modes.Add(BiosData.FanMode.Default);
+
+            try {
+                BiosData.SystemData data = Context.Op.Platform.System.GetSystemData();
+                if(data.ThermalPolicy == BiosData.ThermalPolicyVersion.V1
+                    || data.SupportFlags.HasFlag(BiosData.SysSupportFlags.SwFanCtl)) {
+                    modes.Add(BiosData.FanMode.Performance);
+                    modes.Add(BiosData.FanMode.Cool);
+                }
+            } catch(Exception ex) {
+                if(this.Log != null)
+                    this.Log.Warn("Firmware support probe failed; using modern default modes: " + ex.Message);
+                modes.Add(BiosData.FanMode.Performance);
+                modes.Add(BiosData.FanMode.Cool);
+            }
+
+            return modes;
+
+        }
+
+        private string GetFirmwarePlanName(BiosData.FanMode mode) {
+            if(mode == BiosData.FanMode.Performance)
+                return "固件 性能";
+            if(mode == BiosData.FanMode.Cool)
+                return "固件 清凉";
+            return "固件 默认";
+        }
+
+        private string GetFirmwareSupportSummary() {
+            try {
+                BiosData.SystemData data = Context.Op.Platform.System.GetSystemData();
+                BiosData.FanMode mode = Context.Op.Platform.Fans.GetMode();
+                return "ThermalPolicy=" + data.ThermalPolicy.ToString()
+                    + ", SupportFlags=" + data.SupportFlags.ToString()
+                    + ", HPCM=0x" + ((byte) mode).ToString("X2")
+                    + ", 已展示=" + string.Join("/", GetSupportedFirmwareFanModes().ConvertAll(GetFirmwarePlanName).ToArray());
+            } catch(Exception ex) {
+                return "读取失败: " + ex.Message;
+            }
+        }
+
+        private class GpuPlanItem {
+            public string Text { get; private set; }
+            public BiosData.GpuPowerLevel Level { get; private set; }
+            public GpuPlanItem(string text, BiosData.GpuPowerLevel level) {
+                this.Text = text;
+                this.Level = level;
+            }
+            public override string ToString() {
+                return this.Text;
+            }
+        }
+#endregion
+
     }
 
 }

@@ -138,8 +138,10 @@ namespace OmenMon.Hardware.Platform {
                 return false;
 
             // Enable manual fan mode
-            if(Config.FanLevelNeedManual)
+            if(Config.FanLevelNeedManual) {
+                Status(Severity.Verbose, "SetManual(true)");
                 Platform.Fans.SetManual(true);
+            }
 
             // Set the alternate flag
             this.IsAlternate = isAlternate;
@@ -176,8 +178,10 @@ namespace OmenMon.Hardware.Platform {
             SetFanLevel(new byte[] { Byte.MaxValue, Byte.MaxValue } );
 
             // Disable manual fan mode
-            if(Config.FanLevelNeedManual)
+            if(Config.FanLevelNeedManual) {
+                Status(Severity.Verbose, "SetManual(false)");
                 Platform.Fans.SetManual(false);
+            }
 
             // Restore the previous fan mode
             UpdateFanMode(true, this.LastFanMode);
@@ -201,8 +205,10 @@ namespace OmenMon.Hardware.Platform {
             SetFanLevel(new byte[] { Byte.MaxValue, Byte.MaxValue } );
 
             // Disable manual fan mode
-            if(Config.FanLevelNeedManual)
+            if(Config.FanLevelNeedManual) {
+                Status(Severity.Verbose, "SetManual(false)");
                 Platform.Fans.SetManual(false);
+            }
 
             // Restore the previous fan mode
             UpdateFanMode(true, this.LastFanMode);
@@ -239,7 +245,8 @@ namespace OmenMon.Hardware.Platform {
             // and the target fan levels for the given level
             byte temperature = Platform.GetMaxTemperature(true);
             byte level = GetTemperatureLevel(temperature);
-            byte[] fans = GetFanLevel(level);
+            byte fanLevel = GetUnifiedFanLevel(level);
+            byte[] fans = new byte[] { fanLevel, fanLevel };
 
             // Note: the above could all be accomplished with
             // a single nested call, except we also want to report
@@ -276,6 +283,14 @@ namespace OmenMon.Hardware.Platform {
 
             // Retrieve the value from the configuration data
             return Config.FanProgram[this.Name].Level[level];
+
+        }
+
+        // Obtains the unified fan level for a given temperature level.
+        private byte GetUnifiedFanLevel(byte level) {
+
+            byte[] fans = GetFanLevel(level);
+            return Math.Max(fans[0], fans[1]);
 
         }
 
@@ -321,6 +336,8 @@ namespace OmenMon.Hardware.Platform {
         private void SetFanLevel(byte[] level) {
 
             // Set the fan levels
+            Status(Severity.Verbose,
+                "SetLevels(" + level[0].ToString() + "," + level[1].ToString() + ")");
             this.Platform.Fans.SetLevels(level);
 
             // Note: this does not currently handle the case when both fans are being set to 0
@@ -398,6 +415,7 @@ namespace OmenMon.Hardware.Platform {
                 || this.Platform.Fans.GetMode() != mode)
 
                 // Set the fan mode
+                Status(Severity.Verbose, "SetFanMode(" + ((BiosData.FanMode) mode).ToString() + ")");
                 this.Platform.Fans.SetMode((BiosData.FanMode) mode);
 
         }
@@ -417,6 +435,8 @@ namespace OmenMon.Hardware.Platform {
                 || this.Platform.System.GetGpuPpab() != this.GpuPowerData.Ppab)
 
                 // Set the GPU power
+                Status(Severity.Verbose, "SetGpuPower(" + ((BiosData.GpuPowerData) power).CustomTgp.ToString()
+                    + "," + ((BiosData.GpuPowerData) power).Ppab.ToString() + ")");
                 this.Platform.System.SetGpuPower((BiosData.GpuPowerData) power);
 
         }

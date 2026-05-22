@@ -99,6 +99,9 @@ namespace OmenMon.AppGui {
         // Keeps updating the status as the fan program runs in the background
         public void FanProgramCallback(FanProgram.Severity severity, string message) {
 
+            if(Context.FormMain != null && Context.FormMain.Visible)
+                Context.FormMain.WriteLog("FanProgram: " + message);
+
             // For important status updates only,
             // show a balloon tray notification
             if(severity == FanProgram.Severity.Important)
