@@ -381,6 +381,25 @@ namespace OmenMon.AppGui {
 
         }
 
+        // Opens the fan curve editor for the currently-selected program
+        private void EventActionFanProgEdit(object sender, EventArgs e) {
+
+            if(this.CmbFanProg.SelectedValue == null
+                || (string) this.CmbFanProg.SelectedValue == ""
+                || !Config.FanProgram.ContainsKey((string) this.CmbFanProg.SelectedValue))
+                return;
+
+            using(GuiFormFanCurve form = new GuiFormFanCurve((string) this.CmbFanProg.SelectedValue)) {
+                if(form.ShowDialog(this) == DialogResult.OK) {
+                    SetupFanCtl();
+                    this.CmbFanProg.SelectedValue = form.ProgramName;
+                    Context.Menu.Create();
+                    Config.Save();
+                }
+            }
+
+        }
+
         // Handles the help button being clicked
         private void EventActionHelp(object sender, EventArgs e) {
 
@@ -564,12 +583,21 @@ namespace OmenMon.AppGui {
 
             // Populate the fan program list
             foreach(string name in Config.FanProgram.Keys)
-                FanPrograms.Add( new { Text = name, Value = name } );
+                FanPrograms.Add( new { Text = GetFanProgramText(name), Value = name } );
             if(FanPrograms.Count > 0)
                this.CmbFanProg.DataSource = FanPrograms;
             this.CmbFanProg.DisplayMember = "Text";
             this.CmbFanProg.ValueMember = "Value";
             this.CmbFanProg.EndUpdate();
+
+        }
+
+        // Gets a short user-facing description for a fan program
+        private string GetFanProgramText(string name) {
+
+            string description = Config.Locale.Get(Config.L_PROG + "Desc" + name);
+            return description == Config.L_PROG + "Desc" + name ?
+                name : name + " - " + description;
 
         }
 

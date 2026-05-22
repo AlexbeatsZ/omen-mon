@@ -15,7 +15,7 @@
     <Config>
 
         <!-- Automatically apply settings on start -->
-        <AutoConfig>true</AutoConfig>
+        <AutoConfig>false</AutoConfig>
 
         <!-- Automatically start up with Windows -->
         <AutoStartup>true</AutoStartup>
@@ -106,11 +106,11 @@
 
         <!-- Reapply FanMax during heartbeat only if FanMax is currently active.
              Default false: normally the FanCount heartbeat is enough. -->
-        <PerformanceHeartbeatReapplyFanMax>true</PerformanceHeartbeatReapplyFanMax>
+        <PerformanceHeartbeatReapplyFanMax>false</PerformanceHeartbeatReapplyFanMax>
 
         <!-- Force FanMax during heartbeat. This is intentionally aggressive:
              enable it only when cooling matters more than noise and fan wear. -->
-        <PerformanceHeartbeatForceFanMax>true</PerformanceHeartbeatForceFanMax>
+        <PerformanceHeartbeatForceFanMax>false</PerformanceHeartbeatForceFanMax>
 
         <!-- Reapply the current fan program's GPU power during heartbeat.
              Default false; heartbeat alone may already help GPU power persist. -->
@@ -123,7 +123,7 @@
 
         <!-- Default fan program, which might be loaded on startup
              (depending on the Autoconfig setting) -->
-        <FanProgramDefault>CoolBoost</FanProgramDefault>
+        <FanProgramDefault>OmenBalanced</FanProgramDefault>
 
         <!-- Default alternate fan program to switch to
              if no longer on AC power (i.e. on battery) -->
@@ -154,6 +154,37 @@
                 <Level Temperature="52"><Cpu>50</Cpu><Gpu>50</Gpu></Level>
                 <Level Temperature="56"><Cpu>55</Cpu><Gpu>55</Gpu></Level>
                 <Level Temperature="60"><Cpu>55</Cpu><Gpu>57</Gpu></Level>
+            </Program>
+            <Program Name="OmenPerformance">
+                <FanMode>Performance</FanMode>
+                <GpuPower>Maximum</GpuPower>
+                <Level Temperature="00"><Cpu>25</Cpu><Gpu>25</Gpu></Level>
+                <Level Temperature="40"><Cpu>32</Cpu><Gpu>32</Gpu></Level>
+                <Level Temperature="45"><Cpu>38</Cpu><Gpu>38</Gpu></Level>
+                <Level Temperature="50"><Cpu>44</Cpu><Gpu>44</Gpu></Level>
+                <Level Temperature="55"><Cpu>50</Cpu><Gpu>50</Gpu></Level>
+                <Level Temperature="60"><Cpu>55</Cpu><Gpu>57</Gpu></Level>
+            </Program>
+            <Program Name="OmenBalanced">
+                <FanMode>Default</FanMode>
+                <GpuPower>Medium</GpuPower>
+                <Level Temperature="00"><Cpu>21</Cpu><Gpu>00</Gpu></Level>
+                <Level Temperature="45"><Cpu>25</Cpu><Gpu>25</Gpu></Level>
+                <Level Temperature="50"><Cpu>30</Cpu><Gpu>30</Gpu></Level>
+                <Level Temperature="55"><Cpu>35</Cpu><Gpu>35</Gpu></Level>
+                <Level Temperature="60"><Cpu>40</Cpu><Gpu>40</Gpu></Level>
+                <Level Temperature="70"><Cpu>48</Cpu><Gpu>48</Gpu></Level>
+                <Level Temperature="80"><Cpu>55</Cpu><Gpu>57</Gpu></Level>
+            </Program>
+            <Program Name="OmenEco">
+                <FanMode>Cool</FanMode>
+                <GpuPower>Minimum</GpuPower>
+                <Level Temperature="00"><Cpu>00</Cpu><Gpu>00</Gpu></Level>
+                <Level Temperature="50"><Cpu>21</Cpu><Gpu>00</Gpu></Level>
+                <Level Temperature="58"><Cpu>25</Cpu><Gpu>25</Gpu></Level>
+                <Level Temperature="65"><Cpu>30</Cpu><Gpu>30</Gpu></Level>
+                <Level Temperature="75"><Cpu>40</Cpu><Gpu>40</Gpu></Level>
+                <Level Temperature="85"><Cpu>50</Cpu><Gpu>50</Gpu></Level>
             </Program>
             <Program Name="Power">
                 <FanMode>Performance</FanMode>
@@ -313,11 +344,14 @@
         <String Key="GuiAboutTitle">关于 OmenMon</String>
         <String Key="GuiAboutTitleError">OmenMon 错误</String>
         <String Key="GuiAboutCaption">Omen 硬件监控与控制</String>
+        <String Key="GuiBtnCancel">取消</String>
         <String Key="GuiMainFan">风扇监控与控制</String>
         <String Key="GuiMainFanAuto">自动</String>
         <String Key="GuiMainFanConst">定速</String>
         <String Key="GuiMainFanMax">最大</String>
         <String Key="GuiMainFanProg">方案</String>
+        <String Key="GuiMainFanProgEdit">编辑</String>
+        <String Key="GuiMainFanProgEditInvalid">曲线值必须是 0 到 255 的数字。非零风扇档位会被限制在配置的最小/最大范围内。</String>
         <String Key="GuiMainFanProgSet">设置风扇方案</String>
         <String Key="GuiMainFanProgSetNoSel">未选择方案</String>
         <String Key="GuiMainFanOff">关闭</String>
@@ -344,6 +378,8 @@
         <String Key="GuiMainSysThrottlingOn">正在降频</String>
         <String Key="GuiMainSysMsgWelcome">欢迎使用！</String>
         <String Key="GuiMainTitle">Omen 硬件监控与控制</String>
+        <String Key="GuiMainTabLighting">灯光</String>
+        <String Key="GuiMainTabPerformance">性能</String>
         <String Key="GuiMainTmp">温度传感器读数</String>
         <String Key="GuiMenuSubFan">风扇</String>
         <String Key="GuiMenuActFanMax">最大转速</String>
@@ -380,10 +416,17 @@
         <String Key="GuiTipFanCountdown">这里显示 BIOS 恢复自动默认值前的倒计时。选择定速可阻止倒计时耗尽。</String>
         <String Key="GuiTipFanMax">最大转速模式。风扇将以最大转速运行。</String>
         <String Key="GuiTipFanOff">关闭风扇。会完全停止风扇，请谨慎使用。</String>
+        <String Key="GuiTipFanProgEdit">编辑当前选中的风扇曲线</String>
         <String Key="GuiTipFanSet">点击应用当前设置。设置变化时按钮会高亮。</String>
         <String Key="GuiTipKbdBacklight">打开或关闭键盘背光</String>
         <String Key="GuiTipSys">这里显示系统状态信息</String>
         <String Key="Prog">方案</String>
+        <String Key="ProgDescCoolBoost">强降温，风扇更早拉高</String>
+        <String Key="ProgDescOmenBalanced">近似官方普通模式</String>
+        <String Key="ProgDescOmenEco">近似官方节能模式</String>
+        <String Key="ProgDescOmenPerformance">近似官方性能模式</String>
+        <String Key="ProgDescPower">性能模式，自动曲线</String>
+        <String Key="ProgDescSilent">更安静，偏省电</String>
         <String Key="ProgEnd">方案已结束</String>
         <String Key="ProgFans">风扇</String>
         <String Key="ProgLvl">级别</String>

@@ -16,6 +16,7 @@ namespace OmenMon.AppGui {
 #region Form Components
         // Form components
         private ButtonEx BtnFanSet;           // Button to apply fan settings
+        private Button BtnFanProgEdit;        // Button to edit fan curve
         private Button BtnKbdColorPresetDel;  // Button to delete color preset
         private Button BtnKbdColorPresetSet;  // Button to save color preset
         private CheckBox ChkKbdBacklight;     // Checkbox to toggle backlight
@@ -62,6 +63,9 @@ namespace OmenMon.AppGui {
         private RadioButton RdoFanOff;        // Fan off setting radio button
         private RadioButton RdoFanProg;       // Fan program setting radio button
         private RichTextBox RtfSysInfo;       // System status information text
+        private TabControl TabMain;           // Main function pages
+        private TabPage TabPerformance;       // Performance page
+        private TabPage TabLighting;          // Lighting page
         private TextBox TxtKbdColorVal;       // Keyboard color definition text input/output field
         private ToolTip Tip;                  // Shows pop-up explanations when hovering over items
         private TrackBar TrkFan0Lvl;        // Fan #0 level [krpm]
@@ -94,6 +98,7 @@ namespace OmenMon.AppGui {
             this.BarFan0Rte = new ProgressBarEx();
             this.BarFan1Rte = new ProgressBarEx();
             this.BtnFanSet = new ButtonEx();
+            this.BtnFanProgEdit = new Button();
             this.BtnKbdColorPresetDel = new Button();
             this.BtnKbdColorPresetSet = new Button();
             this.ChkKbdBacklight = new CheckBox();
@@ -138,6 +143,9 @@ namespace OmenMon.AppGui {
             this.RdoFanOff = new RadioButton();
             this.RdoFanProg = new RadioButton();
             this.RtfSysInfo = new RichTextBox();
+            this.TabMain = new TabControl();
+            this.TabPerformance = new TabPage();
+            this.TabLighting = new TabPage();
             this.Tip = new ToolTip(this.Components);
             this.TrkFan0Lvl = new TrackBar();
             this.TrkFan1Lvl = new TrackBar();
@@ -150,6 +158,9 @@ namespace OmenMon.AppGui {
             this.GrpKbd.SuspendLayout();
             this.GrpSys.SuspendLayout();
             this.GrpTmp.SuspendLayout();
+            this.TabPerformance.SuspendLayout();
+            this.TabLighting.SuspendLayout();
+            this.TabMain.SuspendLayout();
             this.SuspendLayout();
 
             // Initialize the components that specifically require it
@@ -301,11 +312,19 @@ namespace OmenMon.AppGui {
             this.CmbFanProg.Size = new Size(88, 21);
             this.CmbFanProg.TabIndex = 14;
 
+            // Button to edit the selected fan program curve
+            this.BtnFanProgEdit.Location = new Point(185, 107);
+            this.BtnFanProgEdit.Name = Gui.T_BTN + Gui.G_FAN + "ProgEdit";
+            this.BtnFanProgEdit.Size = new Size(58, 21);
+            this.BtnFanProgEdit.TabIndex = 15;
+            this.BtnFanProgEdit.Text = Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_FAN + "ProgEdit");
+            this.BtnFanProgEdit.UseVisualStyleBackColor = true;
+
             // Fan auto setting radio button
             this.RdoFanAuto.Location = new Point(38, 130);
             this.RdoFanAuto.Name = "RdoFanAuto";
             this.RdoFanAuto.Size = new Size(55, 21);
-            this.RdoFanAuto.TabIndex = 15;
+            this.RdoFanAuto.TabIndex = 16;
             this.RdoFanAuto.Text = Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_FAN + "Auto");
             this.RdoFanAuto.UseVisualStyleBackColor = true;
 
@@ -316,13 +335,13 @@ namespace OmenMon.AppGui {
             this.CmbFanMode.Location = new Point(95, 130);
             this.CmbFanMode.Name = Gui.T_CMB + Gui.G_FAN + "Mode";
             this.CmbFanMode.Size = new Size(148, 21);
-            this.CmbFanMode.TabIndex = 16;
+            this.CmbFanMode.TabIndex = 17;
 
             // Fan maximum setting radio button
             this.RdoFanMax.Location = new Point(38, 153);
             this.RdoFanMax.Name = Gui.T_RDO + Gui.G_FAN + "Max";
             this.RdoFanMax.Size = new Size(55, 21);
-            this.RdoFanMax.TabIndex = 17;
+            this.RdoFanMax.TabIndex = 18;
             this.RdoFanMax.Text = Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_FAN + "Max");
             this.RdoFanMax.UseVisualStyleBackColor = true;
 
@@ -330,7 +349,7 @@ namespace OmenMon.AppGui {
             this.RdoFanConst.Location = new Point(94, 153);
             this.RdoFanConst.Name = Gui.T_RDO + Gui.G_FAN + "Const";
             this.RdoFanConst.Size = new Size(70, 21);
-            this.RdoFanConst.TabIndex = 18;
+            this.RdoFanConst.TabIndex = 19;
             this.RdoFanConst.Text = Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_FAN + "Const");
             this.RdoFanConst.TextAlign = ContentAlignment.MiddleCenter;
             this.RdoFanConst.UseVisualStyleBackColor = true;
@@ -339,7 +358,7 @@ namespace OmenMon.AppGui {
             this.RdoFanOff.Location = new Point(165, 153);
             this.RdoFanOff.Name = Gui.T_RDO + Gui.G_FAN + "Off";
             this.RdoFanOff.Size = new Size(50, 21);
-            this.RdoFanOff.TabIndex = 19;
+            this.RdoFanOff.TabIndex = 20;
             this.RdoFanOff.Text = Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_FAN + "Off");
             this.RdoFanOff.TextAlign = ContentAlignment.MiddleCenter;
             this.RdoFanOff.UseVisualStyleBackColor = true;
@@ -353,7 +372,7 @@ namespace OmenMon.AppGui {
             this.BtnFanSet.Location = new Point(218, 153);
             this.BtnFanSet.Name = Gui.T_BTN + Gui.G_FAN + "Set";
             this.BtnFanSet.Size = new Size(25, 21);
-            this.BtnFanSet.TabIndex = 20;
+            this.BtnFanSet.TabIndex = 21;
             this.BtnFanSet.Text = Config.Locale.Get(Config.L_GUI + Gui.T_BTN + "Set");
 #endregion
 
@@ -361,6 +380,7 @@ namespace OmenMon.AppGui {
             this.GrpFan.Controls.Add(this.BarFan0Rte);
             this.GrpFan.Controls.Add(this.BarFan1Rte);
             this.GrpFan.Controls.Add(this.BtnFanSet);
+            this.GrpFan.Controls.Add(this.BtnFanProgEdit);
             this.GrpFan.Controls.Add(this.CmbFanMode);
             this.GrpFan.Controls.Add(this.CmbFanProg);
             this.GrpFan.Controls.Add(this.LblFan0Cap);
@@ -381,7 +401,7 @@ namespace OmenMon.AppGui {
             this.GrpFan.Controls.Add(this.TrkFan1Lvl);
 
             // Fan group settings
-            this.GrpFan.Location = new Point(416, 68);
+            this.GrpFan.Location = new Point(416, 3);
             this.GrpFan.Name = Gui.T_GRP + Gui.G_FAN;
             this.GrpFan.Size = new Size(287, 185);
             this.GrpFan.TabIndex = 3;
@@ -449,7 +469,7 @@ namespace OmenMon.AppGui {
             this.GrpKbd.Controls.Add(this.TxtKbdColorVal);
 
             // Keyboard group settings
-            this.GrpKbd.Location = new Point(6, 68);
+            this.GrpKbd.Location = new Point(6, 3);
             this.GrpKbd.Name = Gui.T_GRP + Gui.G_KBD;
             this.GrpKbd.Size = new Size(405, 185);
             this.GrpKbd.TabIndex = 2;
@@ -469,10 +489,10 @@ namespace OmenMon.AppGui {
             this.RtfSysInfo.ReadOnly = true;
             this.RtfSysInfo.ScrollBars = RichTextBoxScrollBars.None;
             this.RtfSysInfo.ShortcutsEnabled = false;
-            this.RtfSysInfo.Size = new Size(277, 43);
+            this.RtfSysInfo.Size = new Size(390, 95);
             this.RtfSysInfo.TabIndex = 0;
             this.RtfSysInfo.TabStop = false;
-            this.RtfSysInfo.WordWrap = false;
+            this.RtfSysInfo.WordWrap = true;
 
             // Override default font selection if set
             if(Config.GuiSysInfoFontSize > 0)
@@ -485,7 +505,7 @@ namespace OmenMon.AppGui {
             // System status group settings
             this.GrpSys.Location = new Point(6, 3);
             this.GrpSys.Name = Gui.T_GRP + Gui.G_SYS;
-            this.GrpSys.Size = new Size(287, 65);
+            this.GrpSys.Size = new Size(405, 118);
             this.GrpSys.TabIndex = 0;
             this.GrpSys.TabStop = false;
             this.GrpSys.Text = Config.Locale.Get(Config.L_GUI_MAIN + Gui.G_SYS).Replace("&", "&&");
@@ -648,7 +668,7 @@ namespace OmenMon.AppGui {
             this.GrpTmp.Controls.Add(this.LblTmp8Val);
 
             // Temperature group settings
-            this.GrpTmp.Location = new Point(298, 3);
+            this.GrpTmp.Location = new Point(6, 121);
             this.GrpTmp.Name = Gui.T_GRP + Gui.G_TMP;
             this.GrpTmp.Size = new Size(405, 65);
             this.GrpTmp.TabIndex = 1;
@@ -657,11 +677,39 @@ namespace OmenMon.AppGui {
 #endregion
 
 #region Main Form
+            // Performance page
+            this.TabPerformance.Controls.Add(this.GrpSys);
+            this.TabPerformance.Controls.Add(this.GrpTmp);
+            this.TabPerformance.Controls.Add(this.GrpFan);
+            this.TabPerformance.Location = new Point(4, 22);
+            this.TabPerformance.Name = "TabPerformance";
+            this.TabPerformance.Padding = new Padding(3);
+            this.TabPerformance.Size = new Size(703, 259);
+            this.TabPerformance.TabIndex = 0;
+            this.TabPerformance.Text = Config.Locale.Get(Config.L_GUI_MAIN + "TabPerformance");
+            this.TabPerformance.UseVisualStyleBackColor = true;
+
+            // Lighting page
+            this.TabLighting.Controls.Add(this.GrpKbd);
+            this.TabLighting.Location = new Point(4, 22);
+            this.TabLighting.Name = "TabLighting";
+            this.TabLighting.Padding = new Padding(3);
+            this.TabLighting.Size = new Size(703, 259);
+            this.TabLighting.TabIndex = 1;
+            this.TabLighting.Text = Config.Locale.Get(Config.L_GUI_MAIN + "TabLighting");
+            this.TabLighting.UseVisualStyleBackColor = true;
+
+            // Main function pages
+            this.TabMain.Controls.Add(this.TabPerformance);
+            this.TabMain.Controls.Add(this.TabLighting);
+            this.TabMain.Location = new Point(6, 6);
+            this.TabMain.Name = "TabMain";
+            this.TabMain.SelectedIndex = 0;
+            this.TabMain.Size = new Size(711, 285);
+            this.TabMain.TabIndex = 0;
+
             // Main form components
-            this.Controls.Add(this.GrpSys);
-            this.Controls.Add(this.GrpKbd);
-            this.Controls.Add(this.GrpFan);
-            this.Controls.Add(this.GrpTmp);
+            this.Controls.Add(this.TabMain);
 
             // Main form settings
             this.AutoScaleDimensions = new SizeF(6F, 13F);
@@ -674,7 +722,7 @@ namespace OmenMon.AppGui {
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = Gui.T_FRM + "Main";
-            this.Size = new Size(725, 300);
+            this.Size = new Size(735, 330);
             this.SizeGripStyle = SizeGripStyle.Hide;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Text = Config.Locale.Get(Config.L_GUI_MAIN + "Title");
@@ -689,6 +737,7 @@ namespace OmenMon.AppGui {
             // Fan control
             this.Tip.SetToolTip(this.RdoFanProg, Config.Locale.Get(Config.L_GUI_TIP + Gui.G_FAN + "Prog"));
             this.Tip.SetToolTip(this.CmbFanProg, Config.Locale.Get(Config.L_GUI_TIP + Gui.G_FAN + "Prog" + Gui.T_CMB));
+            this.Tip.SetToolTip(this.BtnFanProgEdit, Config.Locale.Get(Config.L_GUI_TIP + Gui.G_FAN + "ProgEdit"));
             this.Tip.SetToolTip(this.RdoFanAuto, Config.Locale.Get(Config.L_GUI_TIP + Gui.G_FAN + "Auto"));
             this.Tip.SetToolTip(this.CmbFanMode, Config.Locale.Get(Config.L_GUI_TIP + Gui.G_FAN + "Mode"));
             this.Tip.SetToolTip(this.RdoFanConst, Config.Locale.Get(Config.L_GUI_TIP + Gui.G_FAN + "Const"));
@@ -737,6 +786,9 @@ namespace OmenMon.AppGui {
             this.GrpKbd.ResumeLayout(false);
             this.GrpSys.ResumeLayout(false);
             this.GrpTmp.ResumeLayout(false);
+            this.TabPerformance.ResumeLayout(false);
+            this.TabLighting.ResumeLayout(false);
+            this.TabMain.ResumeLayout(false);
             this.ResumeLayout(false);
 
             // Also make a call to perform layout where necessary
@@ -746,6 +798,7 @@ namespace OmenMon.AppGui {
 #region Component Events
             // Fan
             this.CmbFanProg.SelectionChangeCommitted += EventFanProgramChanged;
+            this.BtnFanProgEdit.Click += EventActionFanProgEdit;
             this.CmbFanMode.SelectionChangeCommitted += EventFanModeChanged;
             this.RdoFanAuto.CheckedChanged += EventFanRdoChanged;
             this.RdoFanConst.CheckedChanged += EventFanRdoChanged;

@@ -65,6 +65,7 @@
         <Compile Include="App\Gui\GuiOp.cs"/>
         <Compile Include="App\Gui\GuiFilter.cs"/>
         <Compile Include="App\Gui\GuiFormAbout.cs"/>
+        <Compile Include="App\Gui\GuiFormFanCurve.cs"/>
         <Compile Include="App\Gui\GuiFormMain.cs"/>
         <Compile Include="App\Gui\GuiFormMainInit.cs"/>
         <Compile Include="App\Gui\GuiIcon.cs"/>
