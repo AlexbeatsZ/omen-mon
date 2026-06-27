@@ -165,7 +165,7 @@ namespace OmenMon.AppGui {
 
             this.GrpFanBars.Location = new Point(402, 8);
             this.GrpFanBars.Size = new Size(154, 464);
-            this.GrpFanBars.Text = "风扇挡位";
+            this.GrpFanBars.Text = "风扇百分比";
 
             this.LblFan0Cap.Location = new Point(22, 24);
             this.LblFan0Cap.Size = new Size(48, 18);
@@ -179,19 +179,19 @@ namespace OmenMon.AppGui {
 
             this.TrkFan0Lvl.AutoSize = false;
             this.TrkFan0Lvl.Location = new Point(26, 48);
-            this.TrkFan0Lvl.Maximum = Config.FanLevelMax;
-            this.TrkFan0Lvl.Minimum = Config.FanLevelMin;
+            this.TrkFan0Lvl.Maximum = 100;
+            this.TrkFan0Lvl.Minimum = 0;
             this.TrkFan0Lvl.Orientation = Orientation.Vertical;
             this.TrkFan0Lvl.Size = new Size(38, 350);
-            this.TrkFan0Lvl.TickFrequency = 5;
+            this.TrkFan0Lvl.TickFrequency = 10;
 
             this.TrkFan1Lvl.AutoSize = false;
             this.TrkFan1Lvl.Location = new Point(88, 48);
-            this.TrkFan1Lvl.Maximum = Config.FanLevelMax;
-            this.TrkFan1Lvl.Minimum = Config.FanLevelMin;
+            this.TrkFan1Lvl.Maximum = 100;
+            this.TrkFan1Lvl.Minimum = 0;
             this.TrkFan1Lvl.Orientation = Orientation.Vertical;
             this.TrkFan1Lvl.Size = new Size(38, 350);
-            this.TrkFan1Lvl.TickFrequency = 5;
+            this.TrkFan1Lvl.TickFrequency = 10;
             this.TrkFan1Lvl.TickStyle = TickStyle.TopLeft;
 
             this.LblFan0Val.Font = this.FigureFont;
@@ -313,8 +313,8 @@ namespace OmenMon.AppGui {
             this.Tip.AutoPopDelay = 5000;
             this.Tip.SetToolTip(this.CmbFanPlan, "选择风扇方案后点击应用。");
             this.Tip.SetToolTip(this.BtnFanManage, "打开统一 Tmax 风扇曲线管理。");
-            this.Tip.SetToolTip(this.TrkFan0Lvl, "定速方案下可拖动；其他模式只读显示。");
-            this.Tip.SetToolTip(this.TrkFan1Lvl, "定速方案下可拖动；其他模式只读显示。");
+            this.Tip.SetToolTip(this.TrkFan0Lvl, "定速方案下可拖动；其他模式只读显示。数值为风扇百分比。");
+            this.Tip.SetToolTip(this.TrkFan1Lvl, "定速方案下可拖动；其他模式只读显示。数值为风扇百分比。");
 
             ((System.ComponentModel.ISupportInitialize) this.PicKbd).EndInit();
             ((System.ComponentModel.ISupportInitialize) this.TrkFan0Lvl).EndInit();

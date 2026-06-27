@@ -15,7 +15,7 @@
     <Config>
 
         <!-- Automatically apply settings on start -->
-        <AutoConfig>false</AutoConfig>
+        <AutoConfig>true</AutoConfig>
 
         <!-- Automatically start up with Windows -->
         <AutoStartup>true</AutoStartup>
@@ -121,6 +121,11 @@
              thermal limits, AC adapter limits, and CPU/GPU shared power limits. -->
         <PerformanceHeartbeatReapplyCpuPower>false</PerformanceHeartbeatReapplyCpuPower>
 
+        <!-- Default GUI fan plan, which is restored on startup
+             when Autoconfig is enabled. Values are:
+             Curve:<ProgramName>, Firmware:<FanMode>, Fixed:<Percent>, or Max -->
+        <FanPlanDefault>Curve:OmenBalanced</FanPlanDefault>
+
         <!-- Default fan program, which might be loaded on startup
              (depending on the Autoconfig setting) -->
         <FanProgramDefault>OmenBalanced</FanProgramDefault>
@@ -146,14 +151,13 @@
             <Program Name="CoolBoost">
                 <FanMode>Performance</FanMode>
                 <GpuPower>Maximum</GpuPower>
-                <Level Temperature="00"><Cpu>25</Cpu><Gpu>25</Gpu></Level>
-                <Level Temperature="36"><Cpu>30</Cpu><Gpu>30</Gpu></Level>
-                <Level Temperature="40"><Cpu>35</Cpu><Gpu>35</Gpu></Level>
-                <Level Temperature="44"><Cpu>40</Cpu><Gpu>40</Gpu></Level>
-                <Level Temperature="48"><Cpu>45</Cpu><Gpu>45</Gpu></Level>
-                <Level Temperature="52"><Cpu>50</Cpu><Gpu>50</Gpu></Level>
-                <Level Temperature="56"><Cpu>55</Cpu><Gpu>55</Gpu></Level>
-                <Level Temperature="60"><Cpu>55</Cpu><Gpu>57</Gpu></Level>
+                <Level Temperature="00"><Cpu>30</Cpu><Gpu>30</Gpu></Level>
+                <Level Temperature="50"><Cpu>32</Cpu><Gpu>32</Gpu></Level>
+                <Level Temperature="60"><Cpu>38</Cpu><Gpu>38</Gpu></Level>
+                <Level Temperature="70"><Cpu>43</Cpu><Gpu>43</Gpu></Level>
+                <Level Temperature="80"><Cpu>48</Cpu><Gpu>48</Gpu></Level>
+                <Level Temperature="88"><Cpu>52</Cpu><Gpu>52</Gpu></Level>
+                <Level Temperature="94"><Cpu>55</Cpu><Gpu>55</Gpu></Level>
             </Program>
             <Program Name="OmenPerformance">
                 <FanMode>Performance</FanMode>
@@ -169,12 +173,12 @@
                 <FanMode>Default</FanMode>
                 <GpuPower>Medium</GpuPower>
                 <Level Temperature="00"><Cpu>21</Cpu><Gpu>21</Gpu></Level>
-                <Level Temperature="60"><Cpu>21</Cpu><Gpu>21</Gpu></Level>
-                <Level Temperature="70"><Cpu>25</Cpu><Gpu>25</Gpu></Level>
-                <Level Temperature="78"><Cpu>32</Cpu><Gpu>32</Gpu></Level>
-                <Level Temperature="85"><Cpu>40</Cpu><Gpu>40</Gpu></Level>
-                <Level Temperature="90"><Cpu>48</Cpu><Gpu>48</Gpu></Level>
-                <Level Temperature="95"><Cpu>55</Cpu><Gpu>55</Gpu></Level>
+                <Level Temperature="60"><Cpu>24</Cpu><Gpu>24</Gpu></Level>
+                <Level Temperature="70"><Cpu>28</Cpu><Gpu>28</Gpu></Level>
+                <Level Temperature="78"><Cpu>36</Cpu><Gpu>36</Gpu></Level>
+                <Level Temperature="84"><Cpu>44</Cpu><Gpu>44</Gpu></Level>
+                <Level Temperature="90"><Cpu>51</Cpu><Gpu>51</Gpu></Level>
+                <Level Temperature="94"><Cpu>55</Cpu><Gpu>55</Gpu></Level>
             </Program>
             <Program Name="OmenEco">
                 <FanMode>Cool</FanMode>
@@ -338,7 +342,7 @@
         <String Key="GuiMainFanMax">最大</String>
         <String Key="GuiMainFanProg">方案</String>
         <String Key="GuiMainFanProgEdit">编辑</String>
-        <String Key="GuiMainFanProgEditInvalid">曲线值必须是 0 到 255 的数字。非零风扇档位会被限制在配置的最小/最大范围内。</String>
+        <String Key="GuiMainFanProgEditInvalid">曲线值必须是 0 到 100 的百分比。</String>
         <String Key="GuiMainFanProgSet">设置风扇方案</String>
         <String Key="GuiMainFanProgSetNoSel">未选择方案</String>
         <String Key="GuiMainFanOff">关闭</String>

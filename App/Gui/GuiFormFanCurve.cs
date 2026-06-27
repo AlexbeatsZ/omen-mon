@@ -63,7 +63,7 @@ namespace OmenMon.AppGui {
 
             this.LblHint.Location = new Point(12, 208);
             this.LblHint.Size = new Size(596, 20);
-            this.LblHint.Text = "最高温度 Tmax -> 统一风扇挡位";
+            this.LblHint.Text = "最高温度 Tmax -> 统一风扇百分比";
             this.LblHint.TextAlign = ContentAlignment.MiddleLeft;
 
             this.Grid.Location = new Point(12, 232);
@@ -159,7 +159,7 @@ namespace OmenMon.AppGui {
 
             this.Grid.Rows.Add(2);
             this.Grid.Rows[0].HeaderCell.Value = "温度";
-            this.Grid.Rows[1].HeaderCell.Value = "风扇挡位";
+            this.Grid.Rows[1].HeaderCell.Value = "风扇%";
 
             int i = 0;
             foreach(byte temperature in program.Level.Keys) {
@@ -169,13 +169,13 @@ namespace OmenMon.AppGui {
                     merged = true;
 
                 this.Grid.Rows[0].Cells[i].Value = temperature.ToString();
-                this.Grid.Rows[1].Cells[i].Value = Math.Max(cpu, gpu).ToString();
+                this.Grid.Rows[1].Cells[i].Value = Config.FanLevelToPercent(Math.Max(cpu, gpu)).ToString();
                 i++;
             }
 
             this.LblHint.Text = merged ?
-                "最高温度 Tmax -> 统一风扇挡位；旧方案 CPU/GPU 挡位不同，已按较高挡位合并显示" :
-                "最高温度 Tmax -> 统一风扇挡位";
+                "最高温度 Tmax -> 统一风扇百分比；旧方案 CPU/GPU 不同，已按较高挡位合并显示" :
+                "最高温度 Tmax -> 统一风扇百分比";
 
             this.Chart.Invalidate();
 
@@ -191,9 +191,9 @@ namespace OmenMon.AppGui {
 
             SortedDictionary<byte, byte[]> levels = new SortedDictionary<byte, byte[]>();
             byte[] t = new byte[] { 0, 60, 70, 78, 85, 90, 95 };
-            byte[] f = new byte[] { 21, 21, 25, 30, 40, 48, 55 };
+            byte[] f = new byte[] { 0, 10, 25, 45, 65, 85, 100 };
             for(int n = 0; n < t.Length; n++)
-                levels[t[n]] = new byte[] { f[n], f[n] };
+                levels[t[n]] = new byte[] { Config.FanPercentToLevel(f[n]), Config.FanPercentToLevel(f[n]) };
 
             Config.FanProgram[name] = new FanProgramData(
                 name,
@@ -265,31 +265,31 @@ namespace OmenMon.AppGui {
 
             for(int i = 0; i < this.Grid.Columns.Count; i++) {
                 int temperature = Convert.ToInt32(this.Grid.Rows[0].Cells[i].Value);
-                int level = Convert.ToInt32(this.Grid.Rows[1].Cells[i].Value);
+                int percent = Convert.ToInt32(this.Grid.Rows[1].Cells[i].Value);
 
                 if(temperature < 0 || temperature > 100)
                     throw new ArgumentOutOfRangeException("温度必须是 0-100 范围内整数。");
                 if(temperature <= lastTemperature)
                     throw new ArgumentOutOfRangeException("温度节点必须严格递增。");
-                if(level < 0 || level > 255)
-                    throw new ArgumentOutOfRangeException("风扇挡位必须是 0-255 范围内整数。");
+                if(percent < 0 || percent > 100)
+                    throw new ArgumentOutOfRangeException("风扇百分比必须是 0-100 范围内整数。");
 
-                if(level != 0) {
+                if(percent != 0)
                     anyNonZero = true;
-                    level = Conv.GetConstrained(level, Config.FanLevelMin, Config.FanLevelMax);
-                }
-                if(temperature >= 80 && level < 40)
+
+                if(temperature >= 80 && percent < 55)
                     highTempLowFan = true;
 
+                byte level = Config.FanPercentToLevel(percent);
                 levels[(byte) temperature] = new byte[] { (byte) level, (byte) level };
                 lastTemperature = temperature;
             }
 
             if(levels.Count == 0 || !anyNonZero)
-                throw new ArgumentOutOfRangeException("不允许保存全 0 风扇挡位。");
+                throw new ArgumentOutOfRangeException("不允许保存全 0 风扇百分比。");
 
             if(highTempLowFan
-                && MessageBox.Show(this, "80°C 以上风扇挡位仍低于 40，确定保存?",
+                && MessageBox.Show(this, "80°C 以上风扇仍低于 55%，确定保存?",
                     "保存风扇方案", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
                     MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 throw new OperationCanceledException("已取消保存。");
@@ -307,17 +307,17 @@ namespace OmenMon.AppGui {
 
             using(Font font = new Font(SystemFonts.MessageBoxFont.FontFamily, 8)) {
                 e.Graphics.DrawString("Tmax", font, Brushes.DimGray, r.Right - 30, r.Bottom + 6);
-                e.Graphics.DrawString("Level", font, Brushes.DimGray, 6, 4);
+                e.Graphics.DrawString("Fan %", font, Brushes.DimGray, 6, 4);
             }
 
             List<Point> points = new List<Point>();
             for(int i = 0; i < this.Grid.Columns.Count; i++)
                 try {
                     int temperature = Convert.ToInt32(this.Grid.Rows[0].Cells[i].Value);
-                    int level = Convert.ToInt32(this.Grid.Rows[1].Cells[i].Value);
+                    int percent = Convert.ToInt32(this.Grid.Rows[1].Cells[i].Value);
                     points.Add(new Point(
                         r.Left + temperature * r.Width / 100,
-                        r.Bottom - Conv.GetConstrained(level, 0, Config.FanLevelMax) * r.Height / Config.FanLevelMax));
+                        r.Bottom - Conv.GetConstrained(percent, 0, 100) * r.Height / 100));
                 } catch { }
 
             if(points.Count == 0)

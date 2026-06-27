@@ -118,6 +118,9 @@ namespace OmenMon.Library {
         public static SortedList<string, FanProgramData> FanProgram =
             new SortedList<string, FanProgramData>();
 
+        // Last fan plan selected from the GUI, persisted as Kind:Value
+        public static string FanPlanDefault = "";
+
         // Default fan program, which might be loaded on startup
         public static string FanProgramDefault; // Unset by default, since there is no default fan program
 

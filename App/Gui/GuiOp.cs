@@ -73,12 +73,9 @@ namespace OmenMon.AppGui {
                     (BiosData.GpuPowerLevel)
                         Enum.Parse(typeof(BiosData.GpuPowerLevel), Config.GpuPowerDefault)));
 
-            // Apply the default fan program,
+            // Apply the saved fan plan,
             // or the alternative program if no AC
-            if(this.FullPower)
-                this.Program.Run(Config.FanProgramDefault);
-            else
-                this.Program.Run(Config.FanProgramDefaultAlt, true);
+            ApplyDefaultFanPlan();
 
             // Update the main form, if visible
             if(Context.FormMain != null && Context.FormMain.Visible)
@@ -93,6 +90,59 @@ namespace OmenMon.AppGui {
             Thread autoConfig = new Thread(this.AutoConfig);
             autoConfig.IsBackground = true;
             autoConfig.Start();
+
+        }
+
+        // Applies the saved fan plan during startup auto-configuration
+        public void ApplyDefaultFanPlan() {
+
+            if(!this.FullPower && !String.IsNullOrEmpty(Config.FanProgramDefaultAlt)
+                && Config.FanProgram.ContainsKey(Config.FanProgramDefaultAlt)) {
+                this.Program.Run(Config.FanProgramDefaultAlt, true);
+                return;
+            }
+
+            if(ApplySavedFanPlan(Config.FanPlanDefault))
+                return;
+
+            if(!String.IsNullOrEmpty(Config.FanProgramDefault)
+                && Config.FanProgram.ContainsKey(Config.FanProgramDefault))
+                this.Program.Run(Config.FanProgramDefault);
+
+        }
+
+        // Applies a persisted GUI fan plan value.
+        private bool ApplySavedFanPlan(string value) {
+
+            if(value == null || value == "")
+                return false;
+
+            try {
+                string[] parts = value.Split(new char[] { ':' }, 2);
+                FanPlanKind kind = (FanPlanKind) Enum.Parse(typeof(FanPlanKind), parts[0]);
+                string arg = parts.Length > 1 ? parts[1] : "";
+
+                switch(kind) {
+                    case FanPlanKind.Curve:
+                        if(!Config.FanProgram.ContainsKey(arg))
+                            return false;
+                        return this.Program.Run(arg);
+
+                    case FanPlanKind.Firmware:
+                        ApplyFirmwareFanMode((BiosData.FanMode) Enum.Parse(typeof(BiosData.FanMode), arg));
+                        return true;
+
+                    case FanPlanKind.Fixed:
+                        ApplyFixedFanPercent((byte) Conv.GetConstrained(Convert.ToInt32(arg), 0, 100));
+                        return true;
+
+                    case FanPlanKind.Max:
+                        ApplyFanMax();
+                        return true;
+                }
+            } catch { }
+
+            return false;
 
         }
 
@@ -269,6 +319,47 @@ namespace OmenMon.AppGui {
             } catch { }
 
             this.Platform.Fans.SetMax(flag);
+
+        }
+
+        // Applies a firmware fan mode without writing manual fan levels.
+        public void ApplyFirmwareFanMode(BiosData.FanMode mode) {
+
+            this.Program.Terminate();
+            try {
+                this.Platform.Fans.GetCount();
+            } catch { }
+            if(this.Platform.Fans.GetOff())
+                this.Platform.Fans.SetOff(false);
+            if(this.Platform.Fans.GetMax())
+                this.Platform.Fans.SetMax(false);
+            if(Config.FanLevelNeedManual && this.Platform.Fans.GetManual())
+                this.Platform.Fans.SetManual(false);
+            this.Platform.Fans.SetMode(mode);
+
+        }
+
+        // Applies a fixed fan percentage by converting to the hardware level scale.
+        public void ApplyFixedFanPercent(byte percent) {
+
+            byte level = Config.FanPercentToLevel(percent);
+            this.Program.Terminate();
+            if(this.Platform.Fans.GetMax())
+                this.Platform.Fans.SetMax(false);
+            if(this.Platform.Fans.GetOff())
+                this.Platform.Fans.SetOff(false);
+            this.Platform.Fans.SetLevels(new byte[] { level, level });
+            this.Platform.Fans.SetMode(this.Platform.Fans.GetMode());
+
+        }
+
+        // Applies maximum fan speed through the context-refreshing helper.
+        public void ApplyFanMax() {
+
+            this.Program.Terminate();
+            if(this.Platform.Fans.GetOff())
+                this.Platform.Fans.SetOff(false);
+            FanMaxSet(true);
 
         }
 

@@ -153,7 +153,7 @@ namespace OmenMon.Library.Locale {
                 ["GuiMainFanMax"] = "Max",
                 ["GuiMainFanProg"] = "Prog",
                 ["GuiMainFanProgEdit"] = "Edit",
-                ["GuiMainFanProgEditInvalid"] = "Curve values must be numbers from 0 to 255. Non-zero fan levels are constrained to the configured min/max range.",
+                ["GuiMainFanProgEditInvalid"] = "Curve values must be percentages from 0 to 100.",
                 ["GuiMainFanProgSet"] = "Set Fan Program",
                 ["GuiMainFanProgSetNoSel"] = "No program selected",
                 ["GuiMainFanOff"] = "Off",

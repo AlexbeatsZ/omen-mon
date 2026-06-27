@@ -286,7 +286,7 @@ namespace OmenMon.AppGui {
                 if(this.CmbFanPlan.SelectedItem is FanPlan plan && plan.Kind == FanPlanKind.Fixed)
                     plan.FixedLevel = (byte) changed.Value;
                 this.BtnFanSet.Checked = true;
-                this.LblFanPlanState.Text = "未应用更改: 定速 " + changed.Value.ToString();
+                this.LblFanPlanState.Text = "未应用更改: 定速 " + changed.Value.ToString() + "%";
             }
         }
 
@@ -313,7 +313,7 @@ namespace OmenMon.AppGui {
                     FanPlanKind.Firmware,
                     "固件",
                     mode));
-            this.FanPlans.Add(new FanPlan("定速", FanPlanKind.Fixed, "固定", null, (byte) Config.FanLevelMin));
+            this.FanPlans.Add(new FanPlan("定速", FanPlanKind.Fixed, "固定", null, 0));
             this.FanPlans.Add(new FanPlan("最大风扇", FanPlanKind.Max, "特殊"));
 
             this.CmbFanPlan.DataSource = this.FanPlans;
@@ -380,12 +380,14 @@ namespace OmenMon.AppGui {
                 Context.Op.Platform.UpdateFans();
                 int level0 = Context.Op.Platform.Fans.Fan[0].GetLevel();
                 int level1 = Context.Op.Platform.Fans.Fan[1].GetLevel();
+                int percent0 = Config.FanLevelToPercent(level0);
+                int percent1 = Config.FanLevelToPercent(level1);
                 if(!this.TrkFan0Lvl.Enabled)
-                    this.TrkFan0Lvl.Value = Conv.GetConstrained(level0, this.TrkFan0Lvl.Minimum, this.TrkFan0Lvl.Maximum);
+                    this.TrkFan0Lvl.Value = Conv.GetConstrained(percent0, this.TrkFan0Lvl.Minimum, this.TrkFan0Lvl.Maximum);
                 if(!this.TrkFan1Lvl.Enabled)
-                    this.TrkFan1Lvl.Value = Conv.GetConstrained(level1, this.TrkFan1Lvl.Minimum, this.TrkFan1Lvl.Maximum);
-                this.LblFan0Val.Text = level0.ToString();
-                this.LblFan1Val.Text = level1.ToString();
+                    this.TrkFan1Lvl.Value = Conv.GetConstrained(percent1, this.TrkFan1Lvl.Minimum, this.TrkFan1Lvl.Maximum);
+                this.LblFan0Val.Text = percent0.ToString() + "%";
+                this.LblFan1Val.Text = percent1.ToString() + "%";
 
                 try {
                     int rpm0 = Context.Op.Platform.Fans.Fan[0].GetSpeed();
@@ -550,19 +552,16 @@ namespace OmenMon.AppGui {
                         break;
 
                     case FanPlanKind.Fixed:
-                        ApplyFixedFanPlan(plan.FixedLevel == null ? (byte) Config.FanLevelMin : (byte) plan.FixedLevel);
+                        ApplyFixedFanPlan(plan.FixedLevel == null ? (byte) 0 : (byte) plan.FixedLevel);
                         break;
 
                     case FanPlanKind.Max:
-                        this.Log.Info("Program.Terminate()");
-                        Context.Op.Program.Terminate();
-                        this.Log.Info("SetOff(false)");
-                        Context.Op.Platform.Fans.SetOff(false);
-                        this.Log.Info("SetMax(true)");
-                        Context.Op.FanMaxSet(true);
+                        this.Log.Info("ApplyFanMax()");
+                        Context.Op.ApplyFanMax();
                         break;
                 }
 
+                PersistFanPlan(plan);
                 string readback = GetFanReadback();
                 this.Log.OperationResult(true, readback);
                 SetLastOperation(true, "风扇方案 " + plan.Name + " 已应用", readback);
@@ -578,30 +577,15 @@ namespace OmenMon.AppGui {
         }
 
         private void ApplyFirmwareFanPlan(BiosData.FanMode mode) {
-            this.Log.Info("Program.Terminate()");
-            Context.Op.Program.Terminate();
-            this.Log.Info("SetOff(false)");
-            Context.Op.Platform.Fans.SetOff(false);
-            this.Log.Info("SetMax(false)");
-            Context.Op.Platform.Fans.SetMax(false);
-            this.Log.Info("SetLevels(255,255)");
-            Context.Op.Platform.Fans.SetLevels(new byte[] { Byte.MaxValue, Byte.MaxValue });
-            this.Log.Info("SetFanMode(" + mode.ToString() + ")");
-            Context.Op.Platform.Fans.SetMode(mode);
+            this.Log.Info("ApplyFirmwareFanMode(" + mode.ToString() + ")");
+            Context.Op.ApplyFirmwareFanMode(mode);
         }
 
-        private void ApplyFixedFanPlan(byte level) {
-            level = (byte) Conv.GetConstrained(level, Config.FanLevelMin, Config.FanLevelMax);
-            this.Log.Info("Program.Terminate()");
-            Context.Op.Program.Terminate();
-            this.Log.Info("SetMax(false)");
-            Context.Op.Platform.Fans.SetMax(false);
-            this.Log.Info("SetOff(false)");
-            Context.Op.Platform.Fans.SetOff(false);
-            this.Log.Info("SetLevels(" + level.ToString() + "," + level.ToString() + ")");
-            Context.Op.Platform.Fans.SetLevels(new byte[] { level, level });
-            this.Log.Info("SetFanMode(GetMode())");
-            Context.Op.Platform.Fans.SetMode(Context.Op.Platform.Fans.GetMode());
+        private void ApplyFixedFanPlan(byte percent) {
+            percent = (byte) Conv.GetConstrained(percent, 0, 100);
+            byte level = Config.FanPercentToLevel(percent);
+            this.Log.Info("ApplyFixedFanPercent(" + percent.ToString() + "% -> " + level.ToString() + ")");
+            Context.Op.ApplyFixedFanPercent(percent);
         }
 
         private string GetFanReadback() {
@@ -612,7 +596,18 @@ namespace OmenMon.AppGui {
             return "HPCM=0x" + ((byte) mode).ToString("X2")
                 + ", FanMax=" + fanMax.ToString()
                 + ", FanOff=" + fanOff.ToString()
-                + ", FanLevel=" + levels[0].ToString() + "/" + levels[1].ToString();
+                + ", FanLevel=" + Config.FanLevelToPercentText(levels[0])
+                + "/" + Config.FanLevelToPercentText(levels[1])
+                + " (" + levels[0].ToString() + "/" + levels[1].ToString() + ")";
+        }
+
+        private void PersistFanPlan(FanPlan plan) {
+            Config.FanPlanDefault = plan.PersistenceValue;
+            if(plan.Kind == FanPlanKind.Curve)
+                Config.FanProgramDefault = plan.Name;
+            Config.AutoConfig = true;
+            Config.Save();
+            this.Log.Info("Persisted FanPlanDefault=" + Config.FanPlanDefault + ", AutoConfig=true");
         }
 #endregion
 

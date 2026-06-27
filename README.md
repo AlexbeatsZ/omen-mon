@@ -14,14 +14,15 @@ This fork builds that heartbeat behavior into the GUI's resident loop. You shoul
 - Fan settings are intended to stay effective while the GUI/tray app is running, instead of being reset shortly after applying.
 - New three-column control panel:
   - system status and operation log
-  - CPU/GPU vertical fan level bars
+  - CPU/GPU vertical fan percentage bars
   - fan, CPU, and GPU plan controls
 - Unified fan plan selector instead of separate auto/program/max/fixed/off radio buttons.
 - "Fan off" is removed from the normal main screen.
 - Legacy fan modes are hidden from the normal main screen.
 - Firmware fan modes are shown as ordinary plans when supported by the firmware readback.
-- Fan curve editing now follows the actual control model: `Tmax -> unified fan level`.
-- Old CPU/GPU split fan levels are merged to the higher value and saved back as `{level, level}`.
+- Fan curve editing now follows the actual control model: `Tmax -> unified fan percentage`.
+- Old CPU/GPU split fan levels are merged to the higher value, shown as percentages, and saved back as `{level, level}` for compatibility.
+- The last applied GUI fan plan is saved and restored on startup when autoconfig is enabled.
 - Quieter default curves. The Silent and Balanced plans avoid aggressive fan speeds below high temperature ranges, while keeping protective high-temperature steps.
 - GPU power plans are simplified to three presets:
   - Base power
@@ -70,10 +71,10 @@ C:\Portable Programs\OmenMon
 The GUI treats fan programs as a single curve:
 
 ```text
-highest temperature Tmax -> unified fan level
+highest temperature Tmax -> unified fan percentage
 ```
 
-The original XML schema is preserved for compatibility, but saved fan levels are written as identical CPU/GPU values:
+The GUI shows and edits fan output as 0-100%. The original XML schema is preserved for compatibility, so saved fan levels are still written as identical CPU/GPU hardware-level values:
 
 ```xml
 <Level Temperature="85"><Cpu>40</Cpu><Gpu>40</Gpu></Level>

@@ -255,7 +255,7 @@ namespace OmenMon.Hardware.Platform {
                 + Conv.GetString(temperature, 2, 10) + Config.Locale.Get(Config.L_UNIT + "Temperature") + " "
                 + Config.Locale.Get(Config.L_PROG + "Lvl") + " " + Conv.GetString(level, 2, 10) + " "
                 + Config.Locale.Get(Config.L_PROG + "Fans") + " "
-                + Conv.GetString(fans[0], 2, 10) + ", " + Conv.GetString(fans[1], 2, 10));
+                + Config.FanLevelToPercentText(fans[0]) + ", " + Config.FanLevelToPercentText(fans[1]));
 
             // Set fan levels
             SetFanLevel(fans);
@@ -412,11 +412,12 @@ namespace OmenMon.Hardware.Platform {
 
             // Skip if the settings are the same already, unless forced not to
             if(forceUpdate
-                || this.Platform.Fans.GetMode() != mode)
+                || this.Platform.Fans.GetMode() != mode) {
 
                 // Set the fan mode
                 Status(Severity.Verbose, "SetFanMode(" + ((BiosData.FanMode) mode).ToString() + ")");
                 this.Platform.Fans.SetMode((BiosData.FanMode) mode);
+            }
 
         }
 
@@ -432,12 +433,13 @@ namespace OmenMon.Hardware.Platform {
             // Skip if the settings are the same already, unless forced not to
             if(forceUpdate
                 || this.Platform.System.GetGpuCustomTgp() != this.GpuPowerData.CustomTgp
-                || this.Platform.System.GetGpuPpab() != this.GpuPowerData.Ppab)
+                || this.Platform.System.GetGpuPpab() != this.GpuPowerData.Ppab) {
 
                 // Set the GPU power
                 Status(Severity.Verbose, "SetGpuPower(" + ((BiosData.GpuPowerData) power).CustomTgp.ToString()
                     + "," + ((BiosData.GpuPowerData) power).Ppab.ToString() + ")");
                 this.Platform.System.SetGpuPower((BiosData.GpuPowerData) power);
+            }
 
         }
 

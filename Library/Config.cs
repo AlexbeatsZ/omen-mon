@@ -88,6 +88,44 @@ namespace OmenMon.Library {
         }
 #endregion
 
+#region Fan Level Helpers
+        // Converts a hardware fan level to the user-facing percentage scale.
+        public static int FanLevelToPercent(int level) {
+
+            if(level <= 0)
+                return 0;
+
+            int span = Math.Max(1, FanLevelMax - FanLevelMin);
+            return Conv.GetConstrained(
+                (int) Math.Round((double) (level - FanLevelMin) * 100 / span),
+                0,
+                100);
+
+        }
+
+        // Converts a user-facing percentage to the hardware fan level scale.
+        public static byte FanPercentToLevel(int percent) {
+
+            percent = Conv.GetConstrained(percent, 0, 100);
+
+            if(percent <= 0)
+                return (byte) FanLevelMin;
+
+            int span = Math.Max(1, FanLevelMax - FanLevelMin);
+            return (byte) Conv.GetConstrained(
+                FanLevelMin + (int) Math.Round((double) percent * span / 100),
+                FanLevelMin,
+                FanLevelMax);
+
+        }
+
+        public static string FanLevelToPercentText(int level) {
+
+            return FanLevelToPercent(level).ToString() + "%";
+
+        }
+#endregion
+
 #region Configuration Retrieval
         // Retrieves a Boolean flag value from the XML configuration file
         private static bool GetBool(XmlDocument xml, string node, out bool value) {
@@ -205,6 +243,9 @@ namespace OmenMon.Library {
 
                     if(GetBool(xml, XmlPrefix + "PerformanceHeartbeatReapplyCpuPower", out flag))
                         PerformanceHeartbeatReapplyCpuPower = flag;
+
+                    FanPlanDefault =
+                        GetString(xml, XmlPrefix + "FanPlanDefault");
 
                     FanProgramDefault =
                         GetString(xml, XmlPrefix + "FanProgramDefault");
@@ -485,6 +526,7 @@ namespace OmenMon.Library {
                     SetBool(xml, XmlPrefix + "PerformanceHeartbeatForceFanMax", PerformanceHeartbeatForceFanMax);
                     SetBool(xml, XmlPrefix + "PerformanceHeartbeatReapplyGpuPower", PerformanceHeartbeatReapplyGpuPower);
                     SetBool(xml, XmlPrefix + "PerformanceHeartbeatReapplyCpuPower", PerformanceHeartbeatReapplyCpuPower);
+                    SetString(xml, XmlPrefix + "FanPlanDefault", FanPlanDefault);
                     SetString(xml, XmlPrefix + "FanProgramDefault", FanProgramDefault);
                     SetString(xml, XmlPrefix + "FanProgramDefaultAlt", FanProgramDefaultAlt);
                     SetBool(xml, XmlPrefix + "FanProgramModeCheckFirst", FanProgramModeCheckFirst);

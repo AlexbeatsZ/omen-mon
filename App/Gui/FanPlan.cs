@@ -40,7 +40,24 @@ namespace OmenMon.AppGui {
             get { return this.Kind.ToString() + ":" + this.Name; }
         }
 
+        public string PersistenceValue {
+            get {
+                switch(this.Kind) {
+                    case FanPlanKind.Firmware:
+                        return this.Kind.ToString() + ":" + this.FirmwareMode.ToString();
+                    case FanPlanKind.Fixed:
+                        return this.Kind.ToString() + ":" + (this.FixedLevel ?? 0).ToString();
+                    case FanPlanKind.Max:
+                        return this.Kind.ToString();
+                    default:
+                        return this.Kind.ToString() + ":" + this.Name;
+                }
+            }
+        }
+
         public override string ToString() {
+            if(this.Kind == FanPlanKind.Fixed)
+                return this.Name + " " + (this.FixedLevel ?? 0).ToString() + "% [" + this.Description + "]";
             return this.Name + " [" + this.Description + "]";
         }
 
