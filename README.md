@@ -51,6 +51,11 @@ Relevant configuration options in `OmenMon.xml`:
 - `PerformanceHeartbeatReapplyFanMax`
 - `PerformanceHeartbeatReapplyGpuPower`
 
+BIOS/WMI and EC operations are serialized inside OmenMon so the heartbeat
+cannot overlap a fan-program update. `OmenMon-firmware.log` in the application
+folder records operation names, timing and errors for freeze diagnosis. It is
+limited to 4 MiB and retains one previous file; it does not record user data.
+
 ## Running
 
 Use the release package or copy these files into the same folder:

@@ -15,6 +15,55 @@ namespace OmenMon.Library {
     // reusable between the CLI and the GUI
     public static class Hw {
 
+        // One gate covers every OmenMon BIOS/WMI and EC transaction. HP BIOS
+        // calls may themselves touch the EC, so separate per-interface locks
+        // would still permit the collision this gate is intended to prevent.
+        private static readonly object FirmwareOperationGate = new object();
+
+        private static void FirmwareOperation(
+            string channel,
+            string operation,
+            Action callback) {
+
+            long started = FirmwareTrace.Begin(channel, operation);
+            lock(FirmwareOperationGate) {
+                FirmwareTrace.LockAcquired(channel, operation, started);
+                Exception error = null;
+                try {
+                    callback();
+                } catch(Exception exception) {
+                    error = exception;
+                    throw;
+                } finally {
+                    // Write END before releasing the gate so that the next
+                    // operation's LOCK record cannot appear ahead of it.
+                    FirmwareTrace.End(channel, operation, started, error);
+                }
+            }
+
+        }
+
+        private static TResult FirmwareOperation<TResult>(
+            string channel,
+            string operation,
+            Func<TResult> callback) {
+
+            long started = FirmwareTrace.Begin(channel, operation);
+            lock(FirmwareOperationGate) {
+                FirmwareTrace.LockAcquired(channel, operation, started);
+                Exception error = null;
+                try {
+                    return callback();
+                } catch(Exception exception) {
+                    error = exception;
+                    throw;
+                } finally {
+                    FirmwareTrace.End(channel, operation, started, error);
+                }
+            }
+
+        }
+
 #region Initialization & Termination
         // State flag
         public static bool IsInitialized { get; private set; }
@@ -37,7 +86,7 @@ namespace OmenMon.Library {
 
         // Closes the hardware
         public static void Close() {
-
+            lock(FirmwareOperationGate) {
                 // Close the BIOS session, if established
                 if(Bios != null)
                 try {
@@ -49,6 +98,8 @@ namespace OmenMon.Library {
                 try {
                     Ec.Close();
                 } catch { }
+
+            }
 
         }
 #endregion
@@ -83,12 +134,30 @@ namespace OmenMon.Library {
 
         // Performs BIOS operations
         public static void BiosExec(Action<IBiosCtl> callback, IBiosCtl bios) {
-            callback(bios);
+            BiosExec(callback, bios, callback.Method.Name);
         }
 
         // Performs BIOS operations and returns a result
         public static TResult BiosExec<TResult>(Func<IBiosCtl,TResult> callback, IBiosCtl bios) {
-            return (TResult) callback(bios);
+            return BiosExec(callback, bios, callback.Method.Name);
+        }
+
+        private static void BiosExec(
+            Action<IBiosCtl> callback,
+            IBiosCtl bios,
+            string operation) {
+
+            FirmwareOperation("BIOS", operation, () => callback(bios));
+
+        }
+
+        private static TResult BiosExec<TResult>(
+            Func<IBiosCtl,TResult> callback,
+            IBiosCtl bios,
+            string operation) {
+
+            return FirmwareOperation("BIOS", operation, () => callback(bios));
+
         }
 
         // Prepares the BIOS for use and then performs operations
@@ -115,14 +184,14 @@ namespace OmenMon.Library {
         public static TResult BiosGet<TResult>(Func<TResult> biosMethod) {
             return Hw.BiosExec<TResult>(bios => {
                 return (TResult) (object) biosMethod();
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
         }
 
         // Performs a BIOS operation and returns a struct result
         public static TResult BiosGetStruct<TResult>(Func<TResult> biosMethod) where TResult : struct {
             return Hw.BiosExec<TResult>(bios => {
                 return (TResult) biosMethod();
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
         }
 
         // Sets a BIOS toggle to a Boolean value passed as a parameter
@@ -130,7 +199,7 @@ namespace OmenMon.Library {
             Hw.BiosExec(bios => {
                 // Send the command to the BIOS
                 biosMethod(flag);
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
         }
 
         // Sets a BIOS setting to a numerical or enumerated value passed as a parameter
@@ -138,7 +207,7 @@ namespace OmenMon.Library {
             Hw.BiosExec(bios => {
                 // Send the command to the BIOS
                 biosMethod((T) param);
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
 
         }
 
@@ -147,7 +216,7 @@ namespace OmenMon.Library {
             Hw.BiosExec(bios => {
                 // Send the updated animation table to the BIOS
                 biosMethod(animTable);
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
         }
 
         // Sets the BIOS keyboard backlight color table based on the value passed as a parameter
@@ -155,7 +224,7 @@ namespace OmenMon.Library {
             Hw.BiosExec(bios => {
                 // Send the updated color table to the BIOS
                 biosMethod(colorTable);
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
         }
 
         // Sets the BIOS fan table based on the value passed as a parameter
@@ -163,7 +232,7 @@ namespace OmenMon.Library {
             Hw.BiosExec(bios => {
                 // Send the updated fan table to the BIOS
                 biosMethod(fanTable);
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
         }
 
         // Sets the BIOS GPU power settings based on the value passed as a parameter
@@ -174,7 +243,7 @@ namespace OmenMon.Library {
                 biosMethod(gpuPowerData);
                 Thread.Sleep(Config.GpuPowerSetInterval);
                 biosMethod(gpuPowerData);
-            }, Hw.Bios);
+            }, Hw.Bios, biosMethod.Method.Name);
         }
 #endregion
 
@@ -208,30 +277,51 @@ namespace OmenMon.Library {
 
         // Runs operations while the Embedded Controller is locked for exclusive use
         public static void EcExec(Action<IEmbeddedController> callback, IEmbeddedController ec) {
-            if(ec.Request(Config.EcMutexTimeout)) {
-                try {
-                    callback(ec);
-                } finally {
-                    ec.Release();
-                }
-            }
-            else {
-                App.Error("ErrEcLock");
-            }
+            EcExec(callback, ec, callback.Method.Name);
         }
 
         // Runs operations while the Embedded Controller is locked for exclusive use and returns a result
         public static TResult EcExec<TResult>(Func<IEmbeddedController,TResult> callback, IEmbeddedController ec) {
-            if(ec.Request(Config.EcMutexTimeout)) {
-                try {
-                    return (TResult) callback(ec);
-                } finally {
-                    ec.Release();
+            return EcExec(callback, ec, callback.Method.Name);
+        }
+
+        private static void EcExec(
+            Action<IEmbeddedController> callback,
+            IEmbeddedController ec,
+            string operation) {
+
+            FirmwareOperation("EC", operation, () => {
+                if(ec.Request(Config.EcMutexTimeout)) {
+                    try {
+                        callback(ec);
+                    } finally {
+                        ec.Release();
+                    }
+                } else {
+                    App.Error("ErrEcLock");
                 }
-            } else {
+            });
+
+        }
+
+        private static TResult EcExec<TResult>(
+            Func<IEmbeddedController,TResult> callback,
+            IEmbeddedController ec,
+            string operation) {
+
+            return FirmwareOperation("EC", operation, () => {
+                if(ec.Request(Config.EcMutexTimeout)) {
+                    try {
+                        return (TResult) callback(ec);
+                    } finally {
+                        ec.Release();
+                    }
+                }
+
                 App.Error("ErrEcLock");
                 return default(TResult);
-            }
+            });
+
         }
 
         // Prepares the Embedded Controller and then runs operations while it is locked for exclusive use
@@ -258,14 +348,14 @@ namespace OmenMon.Library {
         public static byte EcGetByte(byte register) {
             return Hw.EcExec<byte>(ec => {
                 return ec.ReadByte(register);
-            }, Hw.Ec);
+            }, Hw.Ec, "ReadByte[0x" + register.ToString("X2") + "]");
         }
 
         // Prints out the value of a little-endian word stored in two consecutive registers
         public static ushort EcGetWord(byte register) {
             return Hw.EcExec<ushort>(ec => {
                 return ec.ReadWord(register);
-            }, Hw.Ec);
+            }, Hw.Ec, "ReadWord[0x" + register.ToString("X2") + "]");
         }
 
         // Performs an Embedded Controller operation
@@ -278,14 +368,14 @@ namespace OmenMon.Library {
         public static void EcSetByte(byte register, byte value) {
             Hw.EcExec(ec => {
                 ec.WriteByte(register, value);
-            }, Hw.Ec);
+            }, Hw.Ec, "WriteByte[0x" + register.ToString("X2") + "]");
         }
 
         // Sets the value of a little-endian word stored in two consecutive registers
         public static void EcSetWord(byte register, ushort value) {
             Hw.EcExec(ec => {
                 ec.WriteWord(register, value);
-            }, Hw.Ec);
+            }, Hw.Ec, "WriteWord[0x" + register.ToString("X2") + "]");
         }
 
         // Sets the value of a specific byte-sized register

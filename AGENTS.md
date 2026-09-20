@@ -202,7 +202,9 @@ Do not revert Silent/Balanced curves to the original aggressive levels unless ex
 - Needs hardware validation: confirm firmware Default/Performance/Cool now actually takes effect on the target Omen after applying and after reboot.
 - Done: compare the fork against upstream and review community freeze, BSOD, EC-timeout, forced-hibernate, and heartbeat reports.
 - Done: correlate recurring 30-second OmenMon handle activity and local ACPI event 15 warnings with the current scheduling model.
-- Next: implement a shared firmware-operation gate and bounded per-operation diagnostics without disabling or slowing the first test of the `FanCount` heartbeat.
+- Done: implement and deploy a shared firmware-operation gate plus bounded, write-through `OmenMon-firmware.log` diagnostics while keeping the 30-second `FanCount` heartbeat.
+- Verified: first live run crossed three heartbeat cycles with zero serialized-operation violations, errors or incomplete calls; no new ACPI event 15 appeared during the short sample.
+- Needs hardware validation: leave the serialized build and hang monitor running long enough to determine whether freezes or `0x101` recur.
 
 ## Known Bug Fixed
 

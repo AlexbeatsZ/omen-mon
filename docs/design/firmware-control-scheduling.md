@@ -118,24 +118,37 @@ followed its observable process signature. Intel XTU and firmware defects also
 remain possible. The current evidence does not justify removing those
 alternatives.
 
-## Required Repair
+## Implemented Experiment
 
-The first code experiment should change only concurrency while preserving fan
-behavior and the 30-second keepalive interval:
+Commit work following this investigation changes only concurrency while
+preserving fan behavior and the 30-second keepalive interval:
 
-1. Add one reentrant in-process firmware-operation gate shared by BIOS/WMI and
-   EC execution helpers.
-2. Route heartbeat, fan-program, dynamic-icon and user-initiated hardware calls
-   through that gate. A BIOS call may itself reach firmware/EC, so independent
-   BIOS and EC locks are insufficient.
-3. Keep the heartbeat enabled and keep `Platform.Fans.GetCount()` as its action.
-4. Record operation name, start, finish, duration and success to a bounded local
-   diagnostic log. Do not log payload data unrelated to hardware control.
-5. Do not silently discard heartbeat exceptions without leaving a diagnostic
-   record.
+1. One reentrant in-process gate in `Hw` is shared by BIOS/WMI and EC execution
+   helpers. A BIOS call may itself reach firmware/EC, so independent per-interface
+   locks would be insufficient.
+2. Heartbeat, fan-program, dynamic-icon and user-initiated hardware calls all
+   reach those helpers and are therefore serialized.
+3. The heartbeat remains enabled at 30 seconds and still calls
+   `Platform.Fans.GetCount()`.
+4. `OmenMon-firmware.log` records operation channel/name, `BEGIN`, gate
+   acquisition (`LOCK`), `END` or `ERROR`, thread, and elapsed time. It rotates
+   at 4 MiB and retains one previous file. Each line is flushed with write-through
+   so the last acquired operation is useful after forced power loss.
+5. The external hang monitor tails both firmware log files into its independent
+   `app_logs` JSONL stream.
 
 This experiment preserves the known working fan-control rule while testing the
 new fork-specific risk: overlapping firmware calls.
+
+The first live run reproduced the formerly unsafe schedule: an EC read and
+`GetFanCount` began on different threads at startup, followed by the fan plan's
+GPU, temperature, level and mode operations. The gate serialized all of them.
+Across the first 201 records and three 30-second heartbeat cycles, there were no
+overlapping acquired operations, no errors and no incomplete operation at the
+end of the sample. `GetFanCount` completed in about 53-60 ms; the longest
+operation was the startup `SetGpuPower` at about 271 ms. No new ACPI event 15
+appeared during this short validation period. Long-duration hardware validation
+is still required before treating the freeze as fixed.
 
 If another freeze occurs after serialized access, change one variable at a
 time in this order:

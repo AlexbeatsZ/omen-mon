@@ -101,6 +101,7 @@
         <Compile Include="Library\Config.cs"/>
         <Compile Include="Library\ConfigData.cs"/>
         <Compile Include="Library\Conv.cs"/>
+        <Compile Include="Library\FirmwareTrace.cs"/>
         <Compile Include="Library\Gui\ButtonEx.cs"/>
         <Compile Include="Library\Gui\GdiFont.cs"/>
         <Compile Include="Library\Gui\ColorDlgEx.cs"/>
