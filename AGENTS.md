@@ -14,6 +14,11 @@ The key practical difference from upstream is the built-in GUI heartbeat:
 - The relevant implementation path is `GuiOp.PerformanceHeartbeat()`, which calls `Platform.Fans.GetCount()`.
 - Preserve this behavior when changing GUI fan control, tray behavior, or startup/autoconfig logic.
 
+Freeze investigation and firmware scheduling design:
+
+- `docs/design/firmware-control-scheduling.md`
+- Read it before changing heartbeat, fan-program timing, BIOS/WMI calls, EC access, dynamic monitoring, or related diagnostics.
+
 ## Local Portable Install Rule
 
 Every time a new runnable build is produced, also overwrite the local portable install:
@@ -184,6 +189,7 @@ Do not revert Silent/Balanced curves to the original aggressive levels unless ex
 - The GUI should present fan output as 0-100% and convert to the hardware level scale only at the BIOS/EC write boundary. The XML schema remains hardware-level based for compatibility.
 - Persist the exact GUI fan plan as `FanPlanDefault`, not just `FanProgramDefault`, because startup restoration must support curve, firmware, fixed-percent, and max-fan plans.
 - `FanProgram.UpdateFanMode()` and `UpdateGpuPower()` need braces around the conditional bodies; otherwise the final write still runs every update even when the pre-check says to skip it.
+- Do not run the 30-second `FanCount` heartbeat as an independently scheduled firmware thread alongside the 15-second fan-program update. Both counters start together, so every heartbeat is phase-aligned with a fan update and can overlap shared BIOS/CIM and EC-facing work. Preserve the heartbeat, but serialize all firmware operations through one shared gate.
 
 ## Task Board
 
@@ -194,6 +200,9 @@ Do not revert Silent/Balanced curves to the original aggressive levels unless ex
 - Done: adjust default `CoolBoost` and `OmenBalanced` curves to smoother, stronger percent-based ramps.
 - Done: build Release with MSBuild and sync `Bin` output to `C:\Portable Programs\OmenMon`.
 - Needs hardware validation: confirm firmware Default/Performance/Cool now actually takes effect on the target Omen after applying and after reboot.
+- Done: compare the fork against upstream and review community freeze, BSOD, EC-timeout, forced-hibernate, and heartbeat reports.
+- Done: correlate recurring 30-second OmenMon handle activity and local ACPI event 15 warnings with the current scheduling model.
+- Next: implement a shared firmware-operation gate and bounded per-operation diagnostics without disabling or slowing the first test of the `FanCount` heartbeat.
 
 ## Known Bug Fixed
 
