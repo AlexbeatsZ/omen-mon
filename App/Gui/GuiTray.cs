@@ -3,6 +3,7 @@
      //  https://omenmon.github.io/
 
 using System;
+using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using OmenMon.Hardware.Bios;
@@ -50,6 +51,9 @@ namespace OmenMon.AppGui {
         internal int UpdateMonitorTick;
         internal int UpdateHeartbeatTick;
         internal int UpdateProgramTick;
+
+        // One bounded startup check, also queued after resume. No periodic RGB writes.
+        private int KeyboardRestoreDelay = -1;
 #endregion
 
 #region Construction & Disposal
@@ -113,8 +117,10 @@ namespace OmenMon.AppGui {
             Environment.SetEnvironmentVariable(Config.EnvVarSelfName, null);
 
             // Automatically apply settings, if enabled
-            if(Config.AutoConfig)
+            if(Config.AutoConfig) {
                 this.Op.AutoConfigRun();
+                this.KeyboardRestoreDelay = 5;
+            }
 
             // Register the power-mode change event handler
             SystemEvents.PowerModeChanged += EventPowerChange;
@@ -174,10 +180,11 @@ namespace OmenMon.AppGui {
         // Handles a power-mode change event
         private void EventPowerChange(object sender, PowerModeChangedEventArgs e) {
 
-            // Only respond to status change events,
-            // which excludes Resume and Suspend
+            // Keep fan power switching separate from deferred lighting recovery.
             if(e.Mode == PowerModes.StatusChange)
                 this.Op.PowerChange();
+            else if(e.Mode == PowerModes.Resume && Config.AutoConfig)
+                Interlocked.Exchange(ref this.KeyboardRestoreDelay, 2);
 
         }
 
@@ -276,6 +283,14 @@ namespace OmenMon.AppGui {
         // Performs update operations as scheduled
         // This method is called periodically by a timer event
         public void Update() {
+
+            // Power notifications arrive off the UI thread. Restore from the GUI
+            // timer instead, after allowing firmware to finish waking up.
+            int lightingDelay = Interlocked.CompareExchange(ref this.KeyboardRestoreDelay, -1, 0);
+            if(lightingDelay == 0 && Config.AutoConfig)
+                this.Op.RestoreKeyboardLighting();
+            else if(lightingDelay > 0)
+                Interlocked.CompareExchange(ref this.KeyboardRestoreDelay, lightingDelay - 1, lightingDelay);
 
             // Reset the tick counters
             if(this.UpdateIconTick >= Config.UpdateIconInterval)

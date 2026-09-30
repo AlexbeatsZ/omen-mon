@@ -33,6 +33,10 @@ namespace OmenMon.Library {
             return started;
         }
 
+        public static void Status(string channel, string operation, string detail) {
+            Write(channel, operation, "NOTE", 0, detail);
+        }
+
         public static void LockAcquired(string channel, string operation, long started) {
             Write(channel, operation, "LOCK", ElapsedMilliseconds(started), String.Empty);
         }

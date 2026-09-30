@@ -221,6 +221,10 @@ namespace OmenMon.Hardware.Bios {
             // Initializes a color table from a byte array
             public ColorTable(byte[] data) {
 
+                if(data == null || data.Length < COLOR_TABLE_PAD + 4
+                    || data[0] > 3 || data.Length < COLOR_TABLE_PAD + 1 + 3 * (data[0] + 1))
+                    throw new ArgumentException("Invalid keyboard color table.", nameof(data));
+
                 // Retrieve the zone count and set up the zones
                 ZoneCount = data[0];
                 Zone = new RgbColor[ZoneCount + 1];
@@ -237,11 +241,10 @@ namespace OmenMon.Hardware.Bios {
 
             // Initializes a color table from an array
             public ColorTable(int[] color, bool reverse = false) {
+                if(color == null || color.Length != 4)
+                    throw new ArgumentException("Exactly four keyboard colors are required.", nameof(color));
                 ZoneCount = (byte) (color.Length - 1);
                 Zone = new RgbColor[ZoneCount + 1];
-
-                // Only four-zone backlight is supported, bail out otherwise
-                if(ZoneCount > 3) throw new ArgumentOutOfRangeException();
 
                 // Populate the color table with data
                 for(int i = 0; i < Zone.Length; i++)
@@ -251,15 +254,18 @@ namespace OmenMon.Hardware.Bios {
 
             // Initializes a color table from a string
             public ColorTable(string param) {
+                string[] colors = param == null ? new string[0] : param.Split(':');
+                if(colors.Length != 4)
+                    throw new ArgumentException("Exactly four RGB colors are required.", nameof(param));
                 ZoneCount = (byte) (KbdZone.GetValues(typeof(KbdZone)).Length - 1);
                 Zone = new RgbColor[ZoneCount + 1];
                 int i = 0;
 
                 // Populate the color table with data
-                foreach(string color in param.Split(':')) {
+                foreach(string color in colors) {
 
-                    // Only four-zone backlight is supported, bail out otherwise
-                    if(i > 3) throw new ArgumentOutOfRangeException();
+                    if(color.Length != 6 || !System.Text.RegularExpressions.Regex.IsMatch(color, "\\A[0-9A-Fa-f]{6}\\z"))
+                        throw new ArgumentException("Each RGB color must contain six hexadecimal digits.", nameof(param));
 
                     // Add the color data for the zone
                     Zone[i] = new RgbColor(Convert.ToUInt32(color, 16), true);
@@ -268,6 +274,15 @@ namespace OmenMon.Hardware.Bios {
 
                 }
 
+            }
+
+            public override string ToString() {
+                if(ZoneCount != 3 || Zone == null || Zone.Length != 4)
+                    throw new ArgumentException("Exactly four keyboard colors are required.");
+                return Zone[0].ValueReverse.ToString("X6") + ":"
+                    + Zone[1].ValueReverse.ToString("X6") + ":"
+                    + Zone[2].ValueReverse.ToString("X6") + ":"
+                    + Zone[3].ValueReverse.ToString("X6");
             }
 
         }

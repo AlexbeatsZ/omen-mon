@@ -1,245 +1,159 @@
 # AI Maintenance Notes
 
-This file records project-specific context and operational habits for future AI-assisted work on this fork.
+## Goal
 
-## Project Context
+Maintain this OmenMon fork as a persistent GUI fan-control utility for HP Omen
+laptops. Preserve the built-in FanCount performance heartbeat, quiet unified
+fan curves, saved GUI fan plans, and last-applied keyboard lighting.
 
-This repository is a fork/refactor of OmenMon focused on persistent GUI fan control for HP Omen laptops.
+The heartbeat is functionally required on the target laptop: community and
+local testing found that without Platform.Fans.GetCount() fan control can
+revert to firmware defaults after roughly two minutes. Do not remove it while
+changing tray behavior, autoconfiguration, or firmware scheduling.
 
-The key practical difference from upstream is the built-in GUI heartbeat:
+## Current State
 
-- Community testing found that `OmenMon.exe -Bios FanCount` can refresh the firmware performance-control context.
-- Without this refresh, manual fan control may work briefly and then be reset by BIOS default policy after about two minutes.
-- This fork should keep the equivalent BIOS fan-count call inside the GUI resident loop instead of relying on external PowerShell/VBS scripts.
-- The relevant implementation path is `GuiOp.PerformanceHeartbeat()`, which calls `Platform.Fans.GetCount()`.
-- Preserve this behavior when changing GUI fan control, tray behavior, or startup/autoconfig logic.
+- Branch: `codex/ui-refactor-control-panel`; firmware-serialization baseline
+  `1ad711d`. Build outputs `Bin/`, `Obj/`, and `Dist/` are ignored.
+- Local portable install: `C:\Portable Programs\OmenMon`.
+- Main GUI: system status/log on the left, CPU/GPU vertical percentage bars in
+  the middle, fan/CPU/GPU plans on the right. Lighting has its own tab.
+- Fan plans: Curve, Firmware, Fixed and Max. Modern firmware modes: Default,
+  Performance and Cool. Legacy modes and Fan Off stay out of the normal UI.
+  Infer support from ThermalPolicy, SupportFlags and current HPCM; never probe
+  support by writing all possible policies.
+- FanPlanDefault preserves the exact GUI plan; successful application saves it
+  and enables AutoConfig. Startup supports every plan kind.
+- Fan percentages convert configured hardware levels. XML retains hardware
+  values. Silent/Balanced remain quiet below about 70-80 C, ramp gradually at
+  80-90 C and retain protective high-temperature steps.
+- Every BIOS/WMI and EC operation uses one shared reentrant gate in Hw. The
+  30-second heartbeat remains. Bounded write-through diagnostics are stored as
+  OmenMon-firmware.log plus one previous 4 MiB log.
+- 2026-10-01: lighting changes save an independent RGB snapshot and optional
+  backlight choice after successful readback. Startup/resume use bounded
+  recovery. Hardware reads and preview redraws never write lighting.
+- 2026-10-01: low-temperature fan lookup handles curves starting above the
+  current temperature. Empty curves/null names are rejected safely.
+- Last validation: Release build, 31 isolated regression checks, and controlled
+  OEM-to-user lighting restoration with matching real firmware readback.
+  Existing portable presets, fan plans and other XML content were preserved.
 
-Freeze investigation and firmware scheduling design:
+## Active Work
 
-- `docs/design/firmware-control-scheduling.md`
-- Read it before changing heartbeat, fan-program timing, BIOS/WMI calls, EC access, dynamic monitoring, or related diagnostics.
+- Completed: GUI plan/percentage refactor, exact startup plan persistence,
+  quieter curves, shared firmware gate, bounded diagnostics, keyboard startup
+  persistence and curve boundary corrections. Builds copied to the portable
+  install with the user's existing configuration retained.
+- Hardware acceptance still needed: lighting after a normal OS reboot and
+  sleep/resume. Process-restart recovery was tested; neither OS action was
+  forced during the 2026-10-01 work.
+- Hardware acceptance still needed: firmware Default/Performance/Cool after
+  application and reboot; long-duration freeze/0x101 causality remains a
+  separate investigation. Short samples do not establish a freeze fix.
+- Follow-up candidates: UI thread ownership/general startup error handling,
+  CIM resource lifetime, atomic XML saving and exact plan recovery on power
+  transitions. See the command/reliability review before broadening changes.
 
-## Local Portable Install Rule
+## Build / Run / Test
 
-Every time a new runnable build is produced, also overwrite the local portable install:
+This environment can lack the .NET Framework 4.8 targeting pack. Use the existing
+Visual Studio toolchain and FrameworkPathOverride. Do not install global SDKs
+merely to build this project.
 
-```text
-C:\Portable Programs\OmenMon
+```powershell
+& 'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\amd64\MSBuild.exe' OmenMon.csproj /p:Configuration=Release /p:FrameworkPathOverride=C:\Windows\Microsoft.NET\Framework64\v4.0.30319
+.\Tests\run-keyboard-tests.ps1
 ```
 
-Minimum files to copy:
+The fixture uses fake hardware and cleans up its isolated directory under
+%LOCALAPPDATA%\Temp\.agents. It covers lighting/configuration/rendering and
+fan-curve boundaries; it is not a real reboot/sleep test.
+
+### Portable deployment - every runnable build
+
+Every new runnable build must also overwrite the local portable install:
 
 ```text
 Bin\OmenMon.exe -> C:\Portable Programs\OmenMon\OmenMon.exe
 Bin\OmenMon.xml -> C:\Portable Programs\OmenMon\OmenMon.xml
 ```
 
-`OmenMon.xml` must be copied with the exe because fan plans and important runtime configuration live there. Do not update only the exe when XML defaults or fan curves changed.
-
-Before copying, stop any running OmenMon process if the target exe is locked:
+Do not replace user presets/plans with example XML. The build copies repository
+XML to Bin; preserve and merge the current installed configuration into the
+output before deployment when they differ. Copy both exe and XML. Wait for
+actual process exit before copying a locked exe:
 
 ```powershell
-Get-Process OmenMon -ErrorAction SilentlyContinue | Stop-Process -Force
+$targets = @(Get-Process OmenMon -ErrorAction SilentlyContinue)
+foreach($target in $targets) {
+    Stop-Process -Id $target.Id -Force
+    $target.WaitForExit()
+}
 Copy-Item -LiteralPath Bin\OmenMon.exe -Destination 'C:\Portable Programs\OmenMon\OmenMon.exe' -Force
 Copy-Item -LiteralPath Bin\OmenMon.xml -Destination 'C:\Portable Programs\OmenMon\OmenMon.xml' -Force
 ```
 
-After copying, a short startup smoke test is useful:
+The executable requires administrator privileges. The existing OmenMon task
+runs OmenMon.exe -Run Gui with highest privileges; use it to restart the
+resident app without creating a new task or prompting for UAC:
 
 ```powershell
-$p = Start-Process -FilePath 'C:\Portable Programs\OmenMon\OmenMon.exe' -WorkingDirectory 'C:\Portable Programs\OmenMon' -PassThru -WindowStyle Minimized
-Start-Sleep -Seconds 3
-if(Get-Process -Id $p.Id -ErrorAction SilentlyContinue){ Stop-Process -Id $p.Id -Force }
+Start-ScheduledTask -TaskName OmenMon
 ```
 
-Do not leave a test-launched tray process running unless the user explicitly wants that.
+Restore a user's previously running resident app after deployment. Do not leave
+extra test-launched tray processes running. Check startup/readback and firmware
+errors; short smoke samples do not prove long-duration stability.
 
-## Build Command
+### Packaging and releases
 
-This environment may lack the normal .NET Framework 4.8 targeting pack. The build that worked here used `FrameworkPathOverride`:
+Create portable folders/zips under ignored Dist/. Contents: OmenMon.exe,
+OmenMon.xml, OmenMon.exe.config and README.md. Release assets should include the
+exe, XML and portable zip. Use a new tag; do not replace old assets unless asked.
+Binaries do not belong in git by default.
 
-```powershell
-& 'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\amd64\MSBuild.exe' OmenMon.csproj /p:Configuration=Release /p:FrameworkPathOverride=C:\Windows\Microsoft.NET\Framework64\v4.0.30319
-```
-
-Expected output:
-
-- `Bin\OmenMon.exe`
-- `Bin\OmenMon.xml`
-
-If `msbuild` is not in `PATH`, use the full Visual Studio MSBuild path above.
-
-## Packaging / Release
-
-Release packaging should create a portable folder and zip under `Dist\`, but `Dist\` is intentionally ignored by git.
-
-Suggested package contents:
-
-```text
-OmenMon.exe
-OmenMon.xml
-OmenMon.exe.config
-README.md
-```
-
-Example packaging flow:
-
-```powershell
-$distRoot = Join-Path (Resolve-Path .) 'Dist'
-$pkg = Join-Path $distRoot 'OmenMon-ui-refactor-control-panel'
-$zip = Join-Path $distRoot 'OmenMon-ui-refactor-control-panel.zip'
-New-Item -ItemType Directory -Force -Path $pkg | Out-Null
-Copy-Item -LiteralPath Bin\OmenMon.exe -Destination (Join-Path $pkg 'OmenMon.exe') -Force
-Copy-Item -LiteralPath Bin\OmenMon.xml -Destination (Join-Path $pkg 'OmenMon.xml') -Force
-Copy-Item -LiteralPath OmenMon.exe.config -Destination (Join-Path $pkg 'OmenMon.exe.config') -Force
-Copy-Item -LiteralPath README.md -Destination (Join-Path $pkg 'README.md') -Force
-if(Test-Path $zip){ Remove-Item -LiteralPath $zip -Force }
-Compress-Archive -LiteralPath $pkg -DestinationPath $zip
-```
-
-GitHub CLI was available and authenticated as `AlexbeatsZ` during the previous release.
-
-Previous release tag:
-
-```text
-ui-refactor-control-panel-20260522
-```
-
-Previous release URL:
-
-```text
+Previous tag: ui-refactor-control-panel-20260522
 https://github.com/AlexbeatsZ/omen-mon/releases/tag/ui-refactor-control-panel-20260522
-```
 
-When creating a new release, upload at least:
+Commit meaningful source changes and push when connected to GitHub. Remote:
+https://github.com/AlexbeatsZ/omen-mon.git. Verify current authentication.
 
-- `OmenMon.exe`
-- `OmenMon.xml`
-- the portable zip
+## Design Documents
 
-Use a new tag for each release; do not overwrite old release assets unless the user explicitly asks.
+Read the relevant document before modifying its module:
 
-## GUI / Fan Control Design Notes
+- [Firmware scheduling and freeze investigation](docs/design/firmware-control-scheduling.md):
+  heartbeat, fan timing, BIOS/WMI, EC, monitoring and diagnostics.
+- [Keyboard lighting persistence](docs/design/keyboard-lighting.md): snapshots,
+  readback, rendering/write separation, startup/resume and deployment.
+- [Command and reliability review](docs/review/2026-10-01-command-and-reliability.md):
+  HP public documentation, upstream/Linux comparisons and remaining opportunities.
 
-The main GUI was refactored around:
-
-- left column: system status and operation log
-- middle column: two vertical CPU/GPU fan level bars
-- right column: fan, CPU, and GPU plan controls
-
-Normal main UI should not show:
-
-- Fan Off
-- legacy fan modes
-- large RPM/percent readouts
-- old red/blue percent bars
-- all raw temperature sensor tiles by default
-
-Fan plans use `FanPlanKind`:
-
-- `Curve`
-- `Firmware`
-- `Fixed`
-- `Max`
-
-Firmware modes shown in the normal UI should be modern modes only:
-
-- Default
-- Performance
-- Cool
-
-The firmware support listing should be based on readback hints such as `ThermalPolicy`, `SupportFlags`, and current `HPCM`. Do not probe support by writing every possible fan mode, because that changes machine state.
-
-## Fan Curve Semantics
-
-The actual runtime control model is:
+### Unified fan curve contract
 
 ```text
 Tmax = Platform.GetMaxTemperature(true)
-temperature level = GetTemperatureLevel(Tmax)
+temperature step = GetTemperatureLevel(Tmax)
 fan level = unified level
 SetLevels(fan level, fan level)
 ```
 
-Do not reintroduce separate CPU-temperature-to-CPU-fan and GPU-temperature-to-GPU-fan semantics in the GUI unless the lower-level runtime is also changed.
+Old XML CPU/GPU differences merge with max(cpu,gpu). Save identical values for
+both fans. Do not introduce independent temperature semantics in the GUI
+without also changing the lower-level runtime and design documentation.
 
-The XML schema still stores two values for compatibility:
+## Durable Lessons
 
-```xml
-<Level Temperature="85"><Cpu>40</Cpu><Gpu>40</Gpu></Level>
-```
-
-When loading old curves with different CPU/GPU levels, merge them with `max(cpu, gpu)`. When saving, write identical values.
-
-## Quiet Curve Preference
-
-The user prefers quieter curves:
-
-- below roughly 70-80 C, avoid aggressive fan speeds
-- 80-90 C can ramp gradually
-- 90 C and above should still retain protective high fan levels
-
-The intent is to avoid unnecessary noise when the laptop is not uncomfortable to touch and is not throttling.
-
-Do not revert Silent/Balanced curves to the original aggressive levels unless explicitly asked.
-
-## Lessons Learned
-
-- Firmware fan plans should not write manual fan levels before setting `FanMode`. Writing `SetLevels(255,255)` while selecting a firmware policy can leave the firmware mode looking selected but practically overridden by the manual-control path.
-- The GUI should present fan output as 0-100% and convert to the hardware level scale only at the BIOS/EC write boundary. The XML schema remains hardware-level based for compatibility.
-- Persist the exact GUI fan plan as `FanPlanDefault`, not just `FanProgramDefault`, because startup restoration must support curve, firmware, fixed-percent, and max-fan plans.
-- `FanProgram.UpdateFanMode()` and `UpdateGpuPower()` need braces around the conditional bodies; otherwise the final write still runs every update even when the pre-check says to skip it.
-- Do not run the 30-second `FanCount` heartbeat as an independently scheduled firmware thread alongside the 15-second fan-program update. Both counters start together, so every heartbeat is phase-aligned with a fan update and can overlap shared BIOS/CIM and EC-facing work. Preserve the heartbeat, but serialize all firmware operations through one shared gate.
-
-## Task Board
-
-- Done: remove manual `SetLevels(255,255)` from GUI firmware fan mode application.
-- Done: add `FanPlanDefault` loading/saving and startup restoration for curve, firmware, fixed-percent, and max-fan plans.
-- Done: save the last applied GUI fan plan and enable `AutoConfig` after a successful GUI fan-plan apply.
-- Done: convert main fan bars, fixed fan control, curve manager, chart, and readbacks to percentage display/input.
-- Done: adjust default `CoolBoost` and `OmenBalanced` curves to smoother, stronger percent-based ramps.
-- Done: build Release with MSBuild and sync `Bin` output to `C:\Portable Programs\OmenMon`.
-- Needs hardware validation: confirm firmware Default/Performance/Cool now actually takes effect on the target Omen after applying and after reboot.
-- Done: compare the fork against upstream and review community freeze, BSOD, EC-timeout, forced-hibernate, and heartbeat reports.
-- Done: correlate recurring 30-second OmenMon handle activity and local ACPI event 15 warnings with the current scheduling model.
-- Done: implement and deploy a shared firmware-operation gate plus bounded, write-through `OmenMon-firmware.log` diagnostics while keeping the 30-second `FanCount` heartbeat.
-- Verified: first live run crossed three heartbeat cycles with zero serialized-operation violations, errors or incomplete calls; no new ACPI event 15 appeared during the short sample.
-- Needs hardware validation: leave the serialized build and hang monitor running long enough to determine whether freezes or `0x101` recur.
-
-## Known Bug Fixed
-
-The fan curve manager previously crashed with:
-
-```text
-Cannot add rows to a DataGridView that has no columns. Columns must be added first.
-```
-
-Cause:
-
-- `Rows.Add(2)` was called before columns were added.
-
-Fix:
-
-- Clear rows/columns on program load.
-- Add columns for the selected curve first.
-- Then add the two horizontal rows: temperature and fan level.
-
-Keep this order when editing `GuiFormFanCurve`.
-
-## Source Control Notes
-
-Current working branch used for this refactor:
-
-```text
-codex/ui-refactor-control-panel
-```
-
-Build outputs are ignored:
-
-```text
-Bin/
-Obj/
-Dist/
-```
-
-Do not commit generated exe/zip artifacts unless the user explicitly asks for binary artifacts in git. Prefer GitHub Releases for binaries.
+- Writing manual levels before a firmware policy can practically override it.
+  Do not prepend SetLevels(255,255) when selecting a firmware policy in the GUI.
+- A 30-second heartbeat and 15-second fan update starting together align on
+  every heartbeat. A heartbeat-only busy flag cannot protect the fan loop/EC;
+  separate BIOS and EC locks also miss BIOS calls that touch the EC. Preserve
+  one shared firmware gate.
+- FanProgram.UpdateFanMode()/UpdateGpuPower() need braces around conditional
+  writes; missing braces previously forced writes even when checks said skip.
+- In GuiFormFanCurve, clear rows/columns, add columns, then add the two rows.
+  Reversing this order crashes DataGridView row creation.
+- A stop request can return before Windows releases the executable. Wait for
+  process exit before deployment to avoid transient sharing violations.

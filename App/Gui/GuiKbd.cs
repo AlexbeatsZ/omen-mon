@@ -70,14 +70,10 @@ namespace OmenMon.AppGui {
 
         // Sets the backlight state
         public void SetBacklight(bool flag, bool deferUpdate = false) {
-            if(this.IsBacklight != flag) {
-                this.IsBacklight = flag;
-
-                // Allow for deferring update
-                if(!deferUpdate)
-                    Update();
-
-            }
+            Context.Op.Keyboard.SetBacklight(flag);
+            this.IsBacklight = flag;
+            if(!deferUpdate)
+                Update();
         }
 #endregion
 
@@ -99,7 +95,7 @@ namespace OmenMon.AppGui {
 
         // Gets all the colors as an array
         public int[] GetColors() {
-            return ColorArray;
+            return (int[]) ColorArray.Clone();
         }
 
         // Sets the color of the current zone
@@ -109,18 +105,20 @@ namespace OmenMon.AppGui {
 
         // Sets the color of a given zone
         public void SetColor(BiosData.KbdZone zone, int color) {
-            if(GetColor(zone) != color) {
-                this.ColorArray[(int) zone] = color;
-                Update();
-            }
+            if(Conv.GetColorNoAlpha(GetColor(zone)) == Conv.GetColorNoAlpha(color))
+                return;
+            int[] colors = GetColors();
+            colors[(int) zone] = color;
+            SetColors(colors);
         }
 
         // Sets the colors for all zones
         public void SetColors(int[] color) {
-            if(!Conv.ArraysEqual(this.ColorArray, color)) {
-                this.ColorArray = color;
-                Update();
-            }
+            Context.Op.Keyboard.SetColors(new BiosData.ColorTable(color, true));
+            this.ColorArray = (int[]) color.Clone();
+            for(int i = 0; i < this.ColorArray.Length; i++)
+                this.ColorArray[i] = Conv.GetColorNoAlpha(this.ColorArray[i]);
+            Update();
         }
 
         // Sets the color for all zones to the same color value
@@ -198,24 +196,14 @@ namespace OmenMon.AppGui {
 #region Hardware
         // Gets the current state from hardware
         public void GetHw() {
-
-            // Get the backlight state
-            SetBacklight(Context.Op.Platform.System.GetKbdBacklight()
-                == BiosData.Backlight.On ? true : false, true); // Defer update
-
-            // Get the color table
-            SetColors(Context.Op.Platform.System.GetKbdColor());
-
-        }
-
-        // Sets the hardware to the current state
-        public void SetHw() {
-
-            // Set the backlight state
-            Context.Op.Platform.System.SetKbdBacklight(this.IsBacklight);
-
-            // Set the color table
-            Context.Op.Platform.System.SetKbdColor(new BiosData.ColorTable(ColorArray, true));
+            bool enabled = Context.Op.Platform.System.GetKbdBacklight() == BiosData.Backlight.On;
+            BiosData.ColorTable colors = Context.Op.Platform.System.GetKbdColor();
+            int[] values = new int[4];
+            for(int i = 0; i < values.Length; i++)
+                values[i] = (int) colors.Zone[i].ValueReverse;
+            this.IsBacklight = enabled;
+            this.ColorArray = values;
+            Update();
 
         }
 #endregion
@@ -288,9 +276,6 @@ namespace OmenMon.AppGui {
                     this.Context.FormMain.PicKbd.Image = Image;
 
             }
-
-            // Update the hardware
-            SetHw();
 
         }
 

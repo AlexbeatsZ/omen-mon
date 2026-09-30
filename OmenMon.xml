@@ -25,6 +25,13 @@
 
         <!-- Color Backlight -->
 
+        <!-- Last applied GUI colors, restored when AutoConfig is enabled.
+             Empty leaves the firmware colors unchanged. Zone order:
+             Right:Middle:Left:WASD, each a six-digit RGB value. -->
+        <KeyboardColorDefault></KeyboardColorDefault>
+        <!-- KeyboardBacklightDefault is saved after an explicit GUI toggle.
+             When absent, startup preserves the firmware's on/off state. -->
+
         <!-- Note: two default entries are hard-coded in the application
              and will appear if there is nothing else to show instead -->
         <ColorPresets>

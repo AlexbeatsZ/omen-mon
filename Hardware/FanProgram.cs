@@ -309,8 +309,8 @@ namespace OmenMon.Hardware.Platform {
             // or the index of the last element of the list if no larger item exists
             else
 
-                // Return the item at the binary complement index less one
-                return this.Levels[~value - 1];
+                // Use the preceding step, or the first step on a cold start.
+                return this.Levels[Math.Max(0, ~value - 1)];
 
         }
 
@@ -351,7 +351,8 @@ namespace OmenMon.Hardware.Platform {
         private bool Setup(string name) {
 
             // Bail out if referring to a non-existent program
-            if(!Config.FanProgram.ContainsKey(name))
+            if(String.IsNullOrEmpty(name) || !Config.FanProgram.ContainsKey(name)
+                || Config.FanProgram[name].Level.Count == 0)
                 return false;
 
             // Set up the program name

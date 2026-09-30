@@ -187,6 +187,10 @@ namespace OmenMon.Library {
                     if(GetBool(xml, XmlPrefix + "BiosErrorReporting", out flag))
                         BiosErrorReporting = flag;
 
+                    KeyboardColorDefault = GetString(xml, XmlPrefix + "KeyboardColorDefault");
+                    KeyboardBacklightDefault = GetBool(xml, XmlPrefix + "KeyboardBacklightDefault", out flag)
+                        ? (bool?) flag : null;
+
                     if(GetWord(xml, XmlPrefix + "EcFailLimit", out value))
                         EcFailLimit = value;
 
@@ -478,6 +482,9 @@ namespace OmenMon.Library {
                     SetBool(xml, XmlPrefix + "AutoConfig", AutoConfig);
                     SetBool(xml, XmlPrefix + "AutoStartup", AutoStartup);
                     SetBool(xml, XmlPrefix + "BiosErrorReporting", BiosErrorReporting);
+                    SetString(xml, XmlPrefix + "KeyboardColorDefault", KeyboardColorDefault);
+                    if(KeyboardBacklightDefault.HasValue)
+                        SetBool(xml, XmlPrefix + "KeyboardBacklightDefault", KeyboardBacklightDefault.Value);
 
                     // Color presets (so that the settings are sorted alphabetically)
                     // Ensure the parent element node exists, or create it

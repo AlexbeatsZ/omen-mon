@@ -30,6 +30,7 @@ namespace OmenMon.AppGui {
         private string LastOperationStatus;
         private GuiTray Context;
         private GuiLog Log;
+        private bool UpdatingKbd;
         private System.ComponentModel.IContainer Components;
 #endregion
 
@@ -101,12 +102,13 @@ namespace OmenMon.AppGui {
 
 #region Event Actions
         private void EventActionBacklight(object sender, EventArgs e) {
+            bool enabled = !this.ChkKbdBacklight.Checked;
             try {
                 if(Kbd != null)
-                    Kbd.SetBacklight(!this.ChkKbdBacklight.Checked);
+                    Kbd.SetBacklight(enabled);
                 else
-                    Context.Op.Platform.System.SetKbdBacklight(!this.ChkKbdBacklight.Checked);
-                this.Log.Info("SetKbdBacklight(" + (!this.ChkKbdBacklight.Checked).ToString() + ") OK");
+                    Context.Op.Keyboard.SetBacklight(enabled);
+                this.Log.Info("SetKbdBacklight(" + enabled.ToString() + ") OK");
             } catch(Exception ex) {
                 this.Log.Error("SetKbdBacklight failed: " + ex.Message);
             }
@@ -227,7 +229,7 @@ namespace OmenMon.AppGui {
 
 #region Events
         private void EventColorInput(object sender, EventArgs e) {
-            if(Kbd == null)
+            if(Kbd == null || UpdatingKbd)
                 return;
             try {
                 Kbd.SetColors(new BiosData.ColorTable(this.TxtKbdColorVal.Text));
@@ -248,10 +250,14 @@ namespace OmenMon.AppGui {
         }
 
         private void EventColorPreset(object sender, EventArgs e) {
-            if(Kbd == null || ((ComboBox) sender).SelectedValue == null)
+            if(Kbd == null || UpdatingKbd || ((ComboBox) sender).SelectedValue == null)
                 return;
-            Context.FormMain.Kbd.SetColors(Config.ColorPreset[(string) ((ComboBox) sender).SelectedValue]);
-            this.TxtKbdColorVal.Text = Kbd.GetParam();
+            try {
+                Kbd.SetColors(Config.ColorPreset[(string) ((ComboBox) sender).SelectedValue]);
+                UpdateKbd();
+            } catch(Exception error) {
+                this.Log.Error("SetKbdColor failed: " + error.Message);
+            }
         }
 
         private void EventFormClosing(object sender, FormClosingEventArgs e) {
@@ -426,6 +432,15 @@ namespace OmenMon.AppGui {
         }
 
         public void UpdateKbd() {
+            UpdatingKbd = true;
+            try {
+                UpdateKbdControls();
+            } finally {
+                UpdatingKbd = false;
+            }
+        }
+
+        private void UpdateKbdControls() {
             this.TxtKbdColorVal.ForeColor = Color.Empty;
 
             if(!Context.Op.Platform.System.GetKbdBacklightSupport()) {
@@ -469,8 +484,7 @@ namespace OmenMon.AppGui {
 
         public void UpdateKbdCallback(int color) {
             Kbd.SetColor(ColorTranslator.FromWin32(color).ToArgb());
-            this.TxtKbdColorVal.Text = Kbd.GetParam();
-            this.CmbKbdColorPreset.SelectedValue = Kbd.GetPreset();
+            UpdateKbd();
         }
 
         public void UpdateSys() {

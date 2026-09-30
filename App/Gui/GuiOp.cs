@@ -23,6 +23,8 @@ namespace OmenMon.AppGui {
         // Fan program class reference
         internal FanProgram Program;
 
+        internal KeyboardLighting Keyboard;
+
         // Parent class reference
         private GuiTray Context;
 
@@ -47,6 +49,7 @@ namespace OmenMon.AppGui {
 
             // Initialize the fan program
             this.Program = new FanProgram(this.Platform, FanProgramCallback);
+            this.Keyboard = new KeyboardLighting(this.Platform.System);
 
             // Set the full power flag
             this.FullPower = this.Platform.System.IsFullPower();
@@ -63,6 +66,9 @@ namespace OmenMon.AppGui {
 
         // Automatically applies the configuration on startup
         public void AutoConfig() {
+
+            // Lighting recovery is independent of GPU/fan configuration failures.
+            RestoreKeyboardLighting();
 
             // Set whether the application should start automatically with Windows
             Hw.TaskSet(Config.TaskId.Gui, Config.AutoStartup);
@@ -91,6 +97,31 @@ namespace OmenMon.AppGui {
             autoConfig.IsBackground = true;
             autoConfig.Start();
 
+        }
+
+        public void RestoreKeyboardLighting() {
+            try {
+                if(!this.Keyboard.Restore())
+                    return;
+
+                GuiFormMain form = Context.FormMain;
+                if(form != null && !form.IsDisposed && form.IsHandleCreated)
+                    form.BeginInvoke((Action) delegate() {
+                        try {
+                            if(!form.IsDisposed && form.Kbd != null) {
+                                form.Kbd.GetHw();
+                                form.UpdateKbd();
+                            }
+                        } catch(Exception error) {
+                            form.WriteLog("Keyboard lighting refresh failed: " + error.Message);
+                        }
+                    });
+            } catch(Exception error) {
+                // Firmware failures are also recorded by the shared BIOS gate.
+                // A lighting failure must not prevent fan control from starting.
+                Debug.WriteLine("Keyboard lighting restore failed: " + error.Message);
+                FirmwareTrace.Status("GUI", "KeyboardLighting", "Restore failed: " + error.Message);
+            }
         }
 
         // Applies the saved fan plan during startup auto-configuration

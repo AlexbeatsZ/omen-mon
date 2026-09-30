@@ -121,7 +121,8 @@ namespace OmenMon.Hardware.Bios {
 
         // Sets the keyboard backlight status
         public void SetBacklight(Backlight value) {
-            Check(Send(Cmd.Keyboard, 0x05, new byte[4] {(byte) value, 0x00, 0x00, 0x00}));
+            // Never persist a GUI lighting choice after a rejected write.
+            Check(Send(Cmd.Keyboard, 0x05, new byte[4] {(byte) value, 0x00, 0x00, 0x00}), true);
         }
 
         // Toggles the keyboard backlight status
@@ -139,7 +140,7 @@ namespace OmenMon.Hardware.Bios {
 
         // Updates the keyboard backlight color table
         public void SetColorTable(ColorTable data) {
-            Check(Send(Cmd.Keyboard, 0x03, Conv.GetByteArray(data)));
+            Check(Send(Cmd.Keyboard, 0x03, Conv.GetByteArray(data)), true);
         }
 #endregion
 

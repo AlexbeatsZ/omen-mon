@@ -43,6 +43,12 @@ namespace OmenMon.Library {
         // Prefix for default color presets, name to be resolved through locale
         public const string ColorPresetDefaultPrefix = "Default";
 
+        // Last successfully applied GUI colors; empty means leave firmware alone.
+        public static string KeyboardColorDefault = "";
+
+        // Unset until the user explicitly changes the keyboard backlight.
+        public static bool? KeyboardBacklightDefault = null;
+
         // DPI scaling factors, for responding to system DPI changes while the application is running
         public const int DpiSizeAdjFactorX = 10; // Divided by 100
         public const int DpiSizeAdjFactorY = 33; // Divided by 100

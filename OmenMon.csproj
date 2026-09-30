@@ -73,6 +73,7 @@
         <Compile Include="App\Gui\GuiIcon.cs"/>
         <Compile Include="App\Gui\GuiMenu.cs"/>
         <Compile Include="App\Gui\GuiKbd.cs"/>
+        <Compile Include="App\Gui\KeyboardLighting.cs"/>
         <Compile Include="App\Gui\GuiTray.cs"/>
         <Compile Include="Driver\Driver.cs"/>
         <Compile Include="Driver\Ring0.cs"/>

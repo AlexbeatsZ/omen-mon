@@ -23,6 +23,7 @@ This fork builds that heartbeat behavior into the GUI's resident loop. You shoul
 - Fan curve editing now follows the actual control model: `Tmax -> unified fan percentage`.
 - Old CPU/GPU split fan levels are merged to the higher value, shown as percentages, and saved back as `{level, level}` for compatibility.
 - The last applied GUI fan plan is saved and restored on startup when autoconfig is enabled.
+- The last successfully applied keyboard colors and explicit backlight choice are saved and restored on startup, with one bounded follow-up check and resume recovery.
 - Quieter default curves. The Silent and Balanced plans avoid aggressive fan speeds below high temperature ranges, while keeping protective high-temperature steps.
 - GPU power plans are simplified to three presets:
   - Base power
@@ -71,6 +72,23 @@ The current preferred portable folder for this fork is:
 C:\Portable Programs\OmenMon
 ```
 
+## Keyboard Lighting
+
+Apply colors from either the main window or tray menu. The app verifies the
+firmware readback and saves the selection automatically, enabling startup
+configuration. Saving a named preset remains optional. `KeyboardColorDefault`
+holds the four-zone RGB snapshot independently of the preset library;
+`KeyboardBacklightDefault` is saved after an explicit backlight toggle.
+
+With `AutoConfig` enabled, OmenMon restores that selection after it starts and
+after sleep. Empty color defaults and absent backlight defaults leave firmware
+settings alone. The app performs a bounded startup check rather than repeatedly
+overwriting lighting. Preview refreshes never write firmware. Only four-zone
+RGB and backlight-only controls are supported by this interface.
+
+See [lighting design](docs/design/keyboard-lighting.md) and the
+[command/reliability review](docs/review/2026-10-01-command-and-reliability.md).
+
 ## Fan Curves
 
 The GUI treats fan programs as a single curve:
@@ -108,6 +126,14 @@ Example build command used for this fork:
 ```
 
 The normal build output is in `Bin\`.
+
+After building, run the isolated lighting and fan-boundary checks with:
+
+```powershell
+.\Tests\run-keyboard-tests.ps1
+```
+
+The tests use fake hardware and remove their temporary fixtures on completion.
 
 ## Upstream
 

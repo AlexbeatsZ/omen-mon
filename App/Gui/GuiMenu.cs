@@ -156,7 +156,7 @@ namespace OmenMon.AppGui {
             } else
 
                 // Make a platform call otherwise
-                Context.Op.Platform.System.SetKbdBacklight(!((ToolStripMenuItem) sender).Checked);
+                Context.Op.Keyboard.SetBacklight(!((ToolStripMenuItem) sender).Checked);
 
             // Update the menu section
             UpdateKbdBacklight();
@@ -179,7 +179,7 @@ namespace OmenMon.AppGui {
             } else
 
                 // Make a platform call otherwise
-                Context.Op.Platform.System.SetKbdColor(
+                Context.Op.Keyboard.SetColors(
                     Config.ColorPreset[((ToolStripMenuItem) sender).Name.Remove(0, P_KBD_COLOR_PRESET.Length)]);
 
             // Update the menu section
