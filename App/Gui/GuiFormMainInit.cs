@@ -22,7 +22,9 @@ namespace OmenMon.AppGui {
         private Button BtnLogCopy;
         private Button BtnLogExport;
         private CheckBox ChkKbdBacklight;
-        private ComboBox CmbCpuPlan;
+        private TextBox TxtCpuPl1;
+        private TextBox TxtCpuPl4;
+        private TextBox TxtCpuWithGpu;
         private ComboBox CmbFanPlan;
         private ComboBox CmbGpuPlan;
         private ComboBox CmbKbdColorPreset;
@@ -74,7 +76,9 @@ namespace OmenMon.AppGui {
             this.BtnLogCopy = new Button();
             this.BtnLogExport = new Button();
             this.ChkKbdBacklight = new CheckBox();
-            this.CmbCpuPlan = new ComboBox();
+            this.TxtCpuPl1 = new TextBox();
+            this.TxtCpuPl4 = new TextBox();
+            this.TxtCpuWithGpu = new TextBox();
             this.CmbFanPlan = new ComboBox();
             this.CmbGpuPlan = new ComboBox();
             this.CmbKbdColorPreset = new ComboBox();
@@ -216,8 +220,20 @@ namespace OmenMon.AppGui {
             this.GrpPlans.Text = "方案控制";
 
             AddPlanSection(this.GrpPlans, "风扇方案", this.CmbFanPlan, this.BtnFanSet, this.BtnFanManage, this.LblFanPlanState, 28);
-            AddPlanSection(this.GrpPlans, "CPU 方案", this.CmbCpuPlan, this.BtnCpuApply, null, this.LblCpuPlanState, 158);
-            AddPlanSection(this.GrpPlans, "GPU 方案", this.CmbGpuPlan, this.BtnGpuApply, null, this.LblGpuPlanState, 288);
+            Label cpuTitle = new Label { Text = "CPU 功耗 (W)", Location = new Point(14, 158), Size = new Size(280, 18) };
+            cpuTitle.Font = new Font(cpuTitle.Font, FontStyle.Bold);
+            this.GrpPlans.Controls.Add(cpuTitle);
+            AddCpuPowerInput("PL1 / PL2", this.TxtCpuPl1, 16);
+            AddCpuPowerInput("PL4", this.TxtCpuPl4, 114);
+            AddCpuPowerInput("CPU + GPU", this.TxtCpuWithGpu, 212);
+            this.BtnCpuApply.Location = new Point(16, 234);
+            this.BtnCpuApply.Size = new Size(72, 25);
+            this.LblCpuPlanState.Location = new Point(16, 266);
+            this.LblCpuPlanState.Size = new Size(290, 34);
+            this.LblCpuPlanState.ForeColor = SystemColors.GrayText;
+            this.GrpPlans.Controls.Add(this.BtnCpuApply);
+            this.GrpPlans.Controls.Add(this.LblCpuPlanState);
+            AddPlanSection(this.GrpPlans, "GPU 方案", this.CmbGpuPlan, this.BtnGpuApply, null, this.LblGpuPlanState, 322);
 
             this.BtnFanSet.Text = "应用";
             this.BtnFanSet.HighlightColorDark = Color.FromArgb(Config.GuiColorWarmDark);
@@ -230,7 +246,6 @@ namespace OmenMon.AppGui {
             this.BtnGpuApply.Text = "应用";
 
             this.CmbFanPlan.DropDownStyle = ComboBoxStyle.DropDownList;
-            this.CmbCpuPlan.DropDownStyle = ComboBoxStyle.DropDownList;
             this.CmbGpuPlan.DropDownStyle = ComboBoxStyle.DropDownList;
 
             this.TabPerformance.Controls.Add(this.GrpSys);
@@ -312,6 +327,8 @@ namespace OmenMon.AppGui {
             this.Tip.ReshowDelay = 0;
             this.Tip.AutoPopDelay = 5000;
             this.Tip.SetToolTip(this.CmbFanPlan, "选择风扇方案后点击应用。");
+            this.Tip.SetToolTip(this.CmbGpuPlan, "应用后保存选择；可独立于风扇曲线。额外功耗和 Boost 仍受负载、温度与供电影响。");
+            this.Tip.SetToolTip(this.LblCpuPlanState, "显示最近成功发送的参数。固件接口不提供 PL1/PL4 当前值回读。全留空后应用可停止启动恢复。");
             this.Tip.SetToolTip(this.BtnFanManage, "打开统一 Tmax 风扇曲线管理。");
             this.Tip.SetToolTip(this.TrkFan0Lvl, "定速方案下可拖动；其他模式只读显示。数值为风扇百分比。");
             this.Tip.SetToolTip(this.TrkFan1Lvl, "定速方案下可拖动；其他模式只读显示。数值为风扇百分比。");
@@ -332,7 +349,9 @@ namespace OmenMon.AppGui {
             this.ResumeLayout(false);
 
             this.CmbFanPlan.SelectionChangeCommitted += EventFanPlanChanged;
-            this.CmbCpuPlan.SelectionChangeCommitted += EventCpuPlanChanged;
+            this.TxtCpuPl1.TextChanged += EventCpuPlanChanged;
+            this.TxtCpuPl4.TextChanged += EventCpuPlanChanged;
+            this.TxtCpuWithGpu.TextChanged += EventCpuPlanChanged;
             this.CmbGpuPlan.SelectionChangeCommitted += EventGpuPlanChanged;
             this.TrkFan0Lvl.ValueChanged += EventFanTrkChanged;
             this.TrkFan1Lvl.ValueChanged += EventFanTrkChanged;
@@ -387,6 +406,18 @@ namespace OmenMon.AppGui {
             parent.Controls.Add(apply);
             parent.Controls.Add(state);
 
+        }
+
+        private void AddCpuPowerInput(string title, TextBox input, int left) {
+            Label label = new Label { Text = title, Location = new Point(left, 182), Size = new Size(94, 18) };
+            input.Location = new Point(left, 202);
+            input.Size = new Size(94, 20);
+            input.MaxLength = 3;
+            this.GrpPlans.Controls.Add(label);
+            this.GrpPlans.Controls.Add(input);
+            this.Tip.SetToolTip(input, title == "CPU + GPU"
+                ? "同时使用 CPU 与 GPU 时的 CPU 上限 (W)，不是两者总功耗。留空保持原值。"
+                : "功耗上限 (W)。留空保持原值；PL2 随 PL1 一起设置。");
         }
 #endregion
 

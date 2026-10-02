@@ -153,7 +153,13 @@ namespace OmenMon.Hardware.Platform {
             this.LastFanMode = Platform.Fans.GetMode();
 
             // Save the last GPU power state
-            this.LastGpuPowerData = Platform.System.GetGpuPower();
+            try {
+                this.LastGpuPowerData = Platform.System.GetGpuPower(true);
+            } catch(Exception error) {
+                // GPU capability must not prevent the cooling plan from starting.
+                this.LastGpuPowerData = this.GpuPowerData;
+                Status(Severity.Notice, "GPU power readback unavailable: " + error.Message);
+            }
 
             // Update the program
             Update();
@@ -431,15 +437,13 @@ namespace OmenMon.Hardware.Platform {
             if(power == null)
                 power = this.GpuPowerData;
 
-            // Skip if the settings are the same already, unless forced not to
-            if(forceUpdate
-                || this.Platform.System.GetGpuCustomTgp() != this.GpuPowerData.CustomTgp
-                || this.Platform.System.GetGpuPpab() != this.GpuPowerData.Ppab) {
-
-                // Set the GPU power
-                Status(Severity.Verbose, "SetGpuPower(" + ((BiosData.GpuPowerData) power).CustomTgp.ToString()
-                    + "," + ((BiosData.GpuPowerData) power).Ppab.ToString() + ")");
-                this.Platform.System.SetGpuPower((BiosData.GpuPowerData) power);
+            // Fresh readback catches resets after a fan-mode write. A manual GPU
+            // choice also takes precedence during suspend/termination restoration.
+            try {
+                this.Platform.Gpu.Ensure(power.Value, forceUpdate);
+            } catch(Exception error) {
+                Status(Severity.Notice, "GPU power unavailable: " + error.Message);
+                FirmwareTrace.Status("GPU", "FanProgram", error.Message);
             }
 
         }

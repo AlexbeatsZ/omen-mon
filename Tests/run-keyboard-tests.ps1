@@ -1,5 +1,6 @@
 param(
-    [string]$Compiler = 'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+    [string]$Compiler = 'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\Roslyn\csc.exe',
+    [string]$PreviewPath = ''
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -18,11 +19,17 @@ try {
     $config.SelectSingleNode('ColorPresets').AppendChild($preset) | Out-Null
     $fixturePath = Join-Path $testRoot 'fixture.xml'
     $fixture.Save($fixturePath)
-    $testExe = Join-Path $testRoot 'KeyboardLightingTests.exe'
-    & $Compiler /nologo /target:exe /platform:x64 "/out:$testExe" "/reference:$(Join-Path $testRoot 'OmenMon.exe')" /reference:System.Drawing.dll /reference:System.Windows.Forms.dll (Join-Path $PSScriptRoot 'KeyboardLightingTests.cs')
-    if($LASTEXITCODE -ne 0) { throw 'Regression test compilation failed.' }
-    & $testExe $fixturePath
-    if($LASTEXITCODE -ne 0) { throw 'Keyboard lighting regression checks failed.' }
+    foreach($suite in @('KeyboardLightingTests', 'PowerControlTests')) {
+        # Give each suite its original independent configuration fixture.
+        $fixture.Save($fixturePath)
+        $testExe = Join-Path $testRoot ($suite + '.exe')
+        & $Compiler /nologo /target:exe /platform:x64 "/out:$testExe" "/reference:$(Join-Path $testRoot 'OmenMon.exe')" /reference:System.Drawing.dll /reference:System.Windows.Forms.dll (Join-Path $PSScriptRoot ($suite + '.cs'))
+        if($LASTEXITCODE -ne 0) { throw "$suite compilation failed." }
+        if($suite -eq 'PowerControlTests' -and $PreviewPath) {
+            & $testExe $fixturePath ([IO.Path]::GetFullPath($PreviewPath))
+        } else { & $testExe $fixturePath }
+        if($LASTEXITCODE -ne 0) { throw "$suite regression checks failed." }
+    }
 } finally {
     $resolvedTestRoot = [IO.Path]::GetFullPath($testRoot)
     if(!$resolvedTestRoot.StartsWith($tempRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {

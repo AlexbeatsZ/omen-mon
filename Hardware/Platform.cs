@@ -19,6 +19,9 @@ namespace OmenMon.Hardware.Platform {
         // System information
         public ISettings System { get; private set; }
 
+        public GpuPowerControl Gpu { get; private set; }
+        public CpuPowerControl Cpu { get; private set; }
+
         // Fan sensors and controls
         public IFanArray Fans { get; private set; }
 
@@ -36,6 +39,9 @@ namespace OmenMon.Hardware.Platform {
 
             // Initialize the fan controls
             InitFans();
+            this.Gpu = new GpuPowerControl(this.System, () => { this.Fans.GetCount(); });
+            this.Cpu = new CpuPowerControl(
+                data => Hw.BiosSet(Hw.Bios.SetCpuPower, data), () => { this.Fans.GetCount(); });
 
             // Initialize the temperature controls
             InitTemperature();

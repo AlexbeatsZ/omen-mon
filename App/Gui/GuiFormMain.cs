@@ -175,11 +175,20 @@ namespace OmenMon.AppGui {
         }
 
         private void EventActionCpuApply(object sender, EventArgs e) {
-            string plan = this.CmbCpuPlan.SelectedItem as string;
-            this.Log.OperationBegin("Apply CPU Plan: " + plan);
-            this.Log.Warn("CPU power plan is UI-only for now. No CPU PL1/PL4 BIOS write was sent; safe values need model confirmation.");
-            SetLastOperation(true, "CPU 方案 " + plan + " 未写入硬件 (TODO)", "CPU: " + plan);
-            this.LblCpuPlanState.Text = "当前: " + plan + " (未写入)";
+            this.Log.OperationBegin("Apply CPU power limits");
+            try {
+                Context.Op.Platform.Cpu.Select(this.TxtCpuPl1.Text + ":"
+                    + this.TxtCpuPl4.Text + ":" + this.TxtCpuWithGpu.Text);
+                bool enabled = !String.IsNullOrEmpty(Config.CpuPowerDefault);
+                string message = enabled ? "CPU 功耗指令已发送并保存" : "已关闭 CPU 自动恢复；保持当前限制";
+                this.Log.OperationResult(true, message + "; " + Config.CpuPowerDefault);
+                if(enabled) this.Log.Info("CPU PL1/PL4 current-value readback is unavailable; PL2 follows PL1.");
+                SetLastOperation(true, message, Config.CpuPowerDefault);
+            } catch(Exception error) {
+                this.Log.OperationResult(false, error.Message);
+                SetLastOperation(false, "CPU 功耗应用失败", error.Message);
+            }
+            UpdateSys();
         }
 
         private void EventActionGpuApply(object sender, EventArgs e) {
@@ -189,14 +198,10 @@ namespace OmenMon.AppGui {
 
             this.Log.OperationBegin("Apply GPU Plan: " + item.Text);
             try {
-                BiosData.GpuPowerData data = new BiosData.GpuPowerData(item.Level);
-                this.Log.Info("SetGpuPower(" + item.Level.ToString() + ")");
-                Context.Op.Platform.System.SetGpuPower(data);
-                BiosData.GpuPowerData readback = Context.Op.Platform.System.GetGpuPower(true);
+                BiosData.GpuPowerData readback = Context.Op.ApplyGpuPower(item.Level);
                 string readbackText = GetGpuPowerReadback(readback);
                 this.Log.OperationResult(true, readbackText);
                 SetLastOperation(true, "GPU 方案 " + item.Text + " 已应用", readbackText);
-                this.LblGpuPlanState.Text = "当前: " + item.Text;
             } catch(Exception ex) {
                 this.Log.OperationResult(false, ex.Message);
                 SetLastOperation(false, "GPU 方案应用失败", ex.Message);
@@ -276,7 +281,7 @@ namespace OmenMon.AppGui {
         }
 
         private void EventCpuPlanChanged(object sender, EventArgs e) {
-            this.LblCpuPlanState.Text = "未应用更改: " + this.CmbCpuPlan.Text;
+            this.LblCpuPlanState.Text = "未应用更改";
         }
 
         private void EventGpuPlanChanged(object sender, EventArgs e) {
@@ -325,15 +330,22 @@ namespace OmenMon.AppGui {
             this.CmbFanPlan.DataSource = this.FanPlans;
             this.CmbFanPlan.EndUpdate();
 
-            this.CmbCpuPlan.Items.Clear();
-            this.CmbCpuPlan.Items.AddRange(new object[] { "默认", "低功耗", "平衡", "性能" });
-            this.CmbCpuPlan.SelectedIndex = 0;
+            try {
+                string[] limits = CpuPowerControl.Format(CpuPowerControl.Parse(Config.CpuPowerDefault)).Split(':');
+                this.TxtCpuPl1.Text = limits[0];
+                this.TxtCpuPl4.Text = limits[1];
+                this.TxtCpuWithGpu.Text = limits[2];
+            } catch(Exception error) { this.Log.Warn(error.Message); }
 
             this.CmbGpuPlan.Items.Clear();
+            this.CmbGpuPlan.Items.Add(new GpuPlanItem("跟随风扇曲线", null));
             this.CmbGpuPlan.Items.Add(new GpuPlanItem("基础功耗", BiosData.GpuPowerLevel.Minimum));
             this.CmbGpuPlan.Items.Add(new GpuPlanItem("增强功耗", BiosData.GpuPowerLevel.Medium));
             this.CmbGpuPlan.Items.Add(new GpuPlanItem("增强功耗 + Boost", BiosData.GpuPowerLevel.Maximum));
             this.CmbGpuPlan.SelectedIndex = 0;
+            foreach(GpuPlanItem item in this.CmbGpuPlan.Items)
+                if(item.Level.HasValue && item.Level.Value.ToString() == Config.GpuPowerOverride)
+                    this.CmbGpuPlan.SelectedItem = item;
 
             this.TrkFan0Lvl.Enabled = false;
             this.TrkFan1Lvl.Enabled = false;
@@ -490,6 +502,10 @@ namespace OmenMon.AppGui {
         public void UpdateSys() {
             try {
                 Context.Op.Platform.UpdateSystem();
+                UpdateGpuCtl();
+                this.LblCpuPlanState.Text = String.IsNullOrEmpty(Config.CpuPowerDefault) ? "自动恢复: 关闭"
+                    : String.IsNullOrEmpty(Context.Op.Platform.Cpu.LastSent) ? "保存: " + GetCpuPowerDescription(Config.CpuPowerDefault)
+                    : "已发送: " + GetCpuPowerDescription(Context.Op.Platform.Cpu.LastSent);
                 this.SysInfo =
                     "机型: " + Context.Op.Platform.System.GetManufacturer() + " "
                     + Context.Op.Platform.System.GetProduct() + " "
@@ -575,6 +591,7 @@ namespace OmenMon.AppGui {
                         break;
                 }
 
+                Context.Op.RestoreCpuPower();
                 PersistFanPlan(plan);
                 string readback = GetFanReadback();
                 this.Log.OperationResult(true, readback);
@@ -672,10 +689,31 @@ namespace OmenMon.AppGui {
         }
 
         private string GetGpuPowerReadback(BiosData.GpuPowerData data) {
-            return "CustomTgp=" + data.CustomTgp.ToString()
-                + ", Ppab=" + data.Ppab.ToString()
-                + ", DState=" + data.DState.ToString()
-                + ", PeakTemperature=" + data.PeakTemperature.ToString();
+            return GpuPowerControl.Describe(data);
+        }
+
+        private string GetCpuPowerDescription(string value) {
+            BiosData.CpuPowerData data = CpuPowerControl.Parse(value);
+            Func<byte, string> limit = watts => watts == Byte.MaxValue ? "保持" : watts + "W";
+            return "PL1 " + limit(data.Limit1) + " / PL4 " + limit(data.Limit4)
+                + " / 并发 " + limit(data.LimitWithGpu);
+        }
+
+        public void UpdateGpuCtl() {
+            BiosData.GpuPowerData? data = Context.Op.Platform.Gpu.LastReadback;
+            string actual = "未知";
+            if(data.HasValue) {
+                foreach(GpuPlanItem item in this.CmbGpuPlan.Items)
+                    if(item.Level.HasValue && GpuPowerControl.Matches(data.Value,
+                        new BiosData.GpuPowerData(item.Level.Value))) {
+                        actual = item.Text;
+                        break;
+                    }
+            }
+            this.LblGpuPlanState.Text = "固件: " + actual;
+            this.Tip.SetToolTip(this.LblGpuPlanState, "保存的选择: "
+                + (String.IsNullOrEmpty(Config.GpuPowerOverride) ? "跟随风扇曲线" : Config.GpuPowerOverride)
+                + (data.HasValue ? Environment.NewLine + GetGpuPowerReadback(data.Value) : ""));
         }
 
         private List<BiosData.FanMode> GetSupportedFirmwareFanModes() {
@@ -724,8 +762,8 @@ namespace OmenMon.AppGui {
 
         private class GpuPlanItem {
             public string Text { get; private set; }
-            public BiosData.GpuPowerLevel Level { get; private set; }
-            public GpuPlanItem(string text, BiosData.GpuPowerLevel level) {
+            public BiosData.GpuPowerLevel? Level { get; private set; }
+            public GpuPlanItem(string text, BiosData.GpuPowerLevel? level) {
                 this.Text = text;
                 this.Level = level;
             }

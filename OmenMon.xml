@@ -123,7 +123,7 @@
              Default false; heartbeat alone may already help GPU power persist. -->
         <PerformanceHeartbeatReapplyGpuPower>false</PerformanceHeartbeatReapplyGpuPower>
 
-        <!-- Advanced experimental option reserved for CPU power reapply.
+        <!-- Optional reapply of the explicitly saved CPU power on each heartbeat.
              Default false. Repeated CPU power writes can fight BIOS/DPTF,
              thermal limits, AC adapter limits, and CPU/GPU shared power limits. -->
         <PerformanceHeartbeatReapplyCpuPower>false</PerformanceHeartbeatReapplyCpuPower>
@@ -226,6 +226,14 @@
         <!-- Default GPU power settings, which might be loaded on startup
              (depending on the Autoconfig setting) -->
         <GpuPowerDefault>Maximum</GpuPowerDefault>
+
+        <!-- Empty follows the fan curve (or GpuPowerDefault without a curve).
+             The GUI saves Minimum, Medium or Maximum only after firmware readback. -->
+        <GpuPowerOverride></GpuPowerOverride>
+
+        <!-- PL1:PL4:CPUWithGpu in watts. Empty disables startup CPU writes;
+             blank fields leave that limit unchanged. PL2 follows PL1. -->
+        <CpuPowerDefault></CpuPowerDefault>
 
         <!-- The wait before setting the GPU power for the 2nd time [ms]
              (sometimes the settings do not take effect the first time,

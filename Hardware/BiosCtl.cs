@@ -220,7 +220,7 @@ namespace OmenMon.Hardware.Bios {
 #region Performance Control Methods
         // Updates the CPU power settings
         public void SetCpuPower(CpuPowerData data) {
-            Check(Send(Cmd.Default, 0x29, Conv.GetByteArray(data)));
+            Check(Send(Cmd.Default, 0x29, Conv.GetByteArray(data)), true);
             // See: CpuPowerData (struct)
         }
 
@@ -267,14 +267,14 @@ namespace OmenMon.Hardware.Bios {
         // Retrieves the current GPU power settings
         public GpuPowerData GetGpuPower() {
             byte[] outData;
-            Check(Send(Cmd.Default, 0x21, new byte[4] {0x00, 0x00, 0x00, 0x00}, 4, out outData));
+            Check(Send(Cmd.Default, 0x21, new byte[4] {0x00, 0x00, 0x00, 0x00}, 4, out outData), true);
             // See: GpuPowerData (struct)
             return new GpuPowerData(outData);
         }
 
         // Updates the GPU power settings to those passed in a structure
         public void SetGpuPower(GpuPowerData data) {
-            Check(Send(Cmd.Default, 0x22, Conv.GetByteArray(data)));
+            Check(Send(Cmd.Default, 0x22, Conv.GetByteArray(data)), true);
         }
 
         // Updates the GPU power settings to one of the presets

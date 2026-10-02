@@ -35,9 +35,17 @@ changing tray behavior, autoconfiguration, or firmware scheduling.
   recovery. Hardware reads and preview redraws never write lighting.
 - 2026-10-01: low-temperature fan lookup handles curves starting above the
   current temperature. Empty curves/null names are rejected safely.
-- Last validation: Release build, 31 isolated regression checks, and controlled
+- 2026-10-01 validation: Release build, 31 isolated regression checks, and controlled
   OEM-to-user lighting restoration with matching real firmware readback.
   Existing portable presets, fan plans and other XML content were preserved.
+- 2026-10-02: custom UI now exposes CPU PL1/PL4/concurrent watt inputs. CPU
+  commands persist and replay; status is acknowledged send, not PL1/PL4 readback.
+  GPU choices persist independently of curves, require matching fresh readback,
+  and have an explicit curve-follow option. Existing configs get no CPU writes.
+- 2026-10-02: configuration saves are serialized and atomically replace XML.
+  Power save failures propagate and preserve prior saved choices. Release build
+  and 75 isolated checks passed; real three-preset GPU restart/readback confirmed
+  Off/Off, On/Off and On/On without curve override or firmware errors.
 
 ## Active Work
 
@@ -52,8 +60,14 @@ changing tray behavior, autoconfiguration, or firmware scheduling.
   application and reboot; long-duration freeze/0x101 causality remains a
   separate investigation. Short samples do not establish a freeze fix.
 - Follow-up candidates: UI thread ownership/general startup error handling,
-  CIM resource lifetime, atomic XML saving and exact plan recovery on power
+  CIM resource lifetime and exact fan-plan recovery on power
   transitions. See the command/reliability review before broadening changes.
+- CPU watt acceptance requires user-selected values. No PL1/PL4 current-value
+  query is supplied by this BIOS interface. OS reboot/sleep and workload GPU
+  wattage remain unforced; saved restoration is after login, not in BIOS NVRAM.
+- Temporary local `Bin/power-review-original.xml` is retained because automatic
+  approval review rejected its cleanup (`blocked by policy`). It is ignored by
+  Git and is not read by the resident application.
 
 ## Build / Run / Test
 
@@ -66,9 +80,11 @@ merely to build this project.
 .\Tests\run-keyboard-tests.ps1
 ```
 
-The fixture uses fake hardware and cleans up its isolated directory under
-%LOCALAPPDATA%\Temp\.agents. It covers lighting/configuration/rendering and
-fan-curve boundaries; it is not a real reboot/sleep test.
+The runner executes KeyboardLightingTests and PowerControlTests with fake
+hardware and cleans up under %LOCALAPPDATA%\Temp\.agents. It covers lighting,
+fan boundaries, CPU/GPU persistence, error handling and actual GUI apply paths;
+it is not a real reboot/sleep test. Optional preview:
+`Tests\run-keyboard-tests.ps1 -PreviewPath Bin\power-panel-preview.png`.
 
 ### Portable deployment - every runnable build
 
@@ -127,6 +143,12 @@ Read the relevant document before modifying its module:
   heartbeat, fan timing, BIOS/WMI, EC, monitoring and diagnostics.
 - [Keyboard lighting persistence](docs/design/keyboard-lighting.md): snapshots,
   readback, rendering/write separation, startup/resume and deployment.
+- [GPU power](docs/design/gpu-power.md): independent selection, curve priority,
+  fresh verification, recovery and the shared firmware gate.
+- [CPU power](docs/design/cpu-power.md): direct watt inputs, upstream payload,
+  acknowledged sends, persistence and bounded recovery.
+- [Upstream and power review](docs/review/2026-10-02-upstream-and-power.md):
+  inherited features, confirmed defects and live GPU acceptance boundaries.
 - [Command and reliability review](docs/review/2026-10-01-command-and-reliability.md):
   HP public documentation, upstream/Linux comparisons and remaining opportunities.
 
@@ -157,3 +179,6 @@ without also changing the lower-level runtime and design documentation.
   Reversing this order crashes DataGridView row creation.
 - A stop request can return before Windows releases the executable. Wait for
   process exit before deployment to avoid transient sharing violations.
+- GPU writes must invalidate cached power data even if the second upstream
+  write fails. A stale cache can hide resets after fan-mode changes; verify the
+  two requested switches using a fresh read before claiming an applied preset.

@@ -20,6 +20,13 @@ namespace OmenMon.Library {
         // would still permit the collision this gate is intended to prevent.
         private static readonly object FirmwareOperationGate = new object();
 
+        // Preserve the shared gate across a read/write/readback transaction.
+        // Individual operations retain their existing diagnostic records.
+        public static TResult WithFirmwareGate<TResult>(Func<TResult> callback) {
+            lock(FirmwareOperationGate)
+                return callback();
+        }
+
         private static void FirmwareOperation(
             string channel,
             string operation,

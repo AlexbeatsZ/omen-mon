@@ -434,6 +434,8 @@ namespace OmenMon.Hardware.Bios {
 
             // Initializes the GPU power state structure from a data array
             public GpuPowerData(byte[] data) {
+                if(data == null || data.Length < 4)
+                    throw new ArgumentException("GPU power readback must contain four bytes.");
                 CustomTgp = (GpuCustomTgp) data[0];
                 Ppab = (GpuPpab) data[1];
                 DState = (GpuDState) data[2];

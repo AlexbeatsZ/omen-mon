@@ -95,6 +95,8 @@
         <Compile Include="Hardware\Fan.cs"/>
         <Compile Include="Hardware\FanArray.cs"/>
         <Compile Include="Hardware\FanProgram.cs"/>
+        <Compile Include="Hardware\GpuPowerControl.cs"/>
+        <Compile Include="Hardware\CpuPowerControl.cs"/>
         <Compile Include="Hardware\Platform.cs"/>
         <Compile Include="Hardware\PlatformComponent.cs"/>
         <Compile Include="Hardware\PlatformData.cs"/>

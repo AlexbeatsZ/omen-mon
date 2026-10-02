@@ -29,6 +29,12 @@ This fork builds that heartbeat behavior into the GUI's resident loop. You shoul
   - Base power
   - Enhanced power
   - Enhanced power + Boost
+- GPU selections now persist independently of fan curves, with an optional
+  "follow fan curve" choice. Success requires fresh firmware readback.
+- CPU controls accept PL1, PL4 and the concurrent CPU-with-GPU limit in watts.
+  Applied values are saved and replayed at startup and after resume.
+- Configuration saves use serialized atomic replacement, preserving unrelated
+  settings if saving fails.
 - GUI operation log records high-level actions, BIOS/EC calls, results, and readback summaries.
 
 ## Why The Heartbeat Matters
@@ -115,6 +121,30 @@ The normal GUI shows modern firmware modes only:
 
 The app reads firmware/system data such as thermal policy, support flags, and current `HPCM` state. It does not probe support by writing every possible fan mode, because that would change the machine state.
 
+## CPU and GPU Power
+
+The right-hand panel retains this fork's layout. Enter CPU limits directly:
+PL1 (PL2 follows PL1), PL4, and the CPU limit while the GPU is also active.
+Blank leaves a field unchanged; all blank followed by Apply disables CPU
+startup recovery without changing the current limits. The BIOS command accepts
+1-254 W but the hardware can constrain values further. No values are invented
+or applied automatically to an old configuration.
+
+The CPU interface acknowledges commands but does not provide general PL1/PL4
+readback. The GUI therefore shows the most recently sent parameters. GPU
+success is verified against CustomTgp and PPAB readback. Those switches permit
+firmware-defined extra power; they do not prescribe a specific wattage or make
+an idle GPU consume maximum power.
+
+Successful selections enable AutoConfig and save `CpuPowerDefault` /
+`GpuPowerOverride`. The existing elevated OmenMon logon task restores them
+after login. One bounded follow-up and resume recovery cover firmware settling.
+The original fan plans, heartbeat and user keyboard presets remain in place.
+
+See [CPU design](docs/design/cpu-power.md),
+[GPU design](docs/design/gpu-power.md), and the
+[upstream comparison](docs/review/2026-10-02-upstream-and-power.md).
+
 ## Build
 
 This is a .NET Framework WinForms project.
@@ -127,7 +157,8 @@ Example build command used for this fork:
 
 The normal build output is in `Bin\`.
 
-After building, run the isolated lighting and fan-boundary checks with:
+After building, run the isolated lighting, fan-boundary, CPU/GPU persistence
+and actual GUI apply-handler checks with:
 
 ```powershell
 .\Tests\run-keyboard-tests.ps1

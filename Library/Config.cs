@@ -265,6 +265,8 @@ namespace OmenMon.Library {
 
                     GpuPowerDefault =
                         GetString(xml, XmlPrefix + "GpuPowerDefault");
+                    GpuPowerOverride = GetString(xml, XmlPrefix + "GpuPowerOverride");
+                    CpuPowerDefault = GetString(xml, XmlPrefix + "CpuPowerDefault");
 
                     if(GetWord(xml, XmlPrefix + "GpuPowerSetInterval", out value))
                         GpuPowerSetInterval = value;
@@ -454,8 +456,20 @@ namespace OmenMon.Library {
 #endregion
 
 #region Configuration Saving
+        private static readonly object SaveGate = new object();
+
         // Save the configuration data to the XML file
         public static void Save() {
+            Save(false);
+        }
+
+        // Power selections need an explicit persistence failure, rather than
+        // reporting success after a save error was only shown in a dialog.
+        public static void Save(bool throwOnError) {
+            lock(SaveGate) SaveCore(throwOnError);
+        }
+
+        private static void SaveCore(bool throwOnError) {
 
             // Proceed only if the filename is not empty
             if(FilePath != "") {
@@ -471,6 +485,10 @@ namespace OmenMon.Library {
                         xml.Load(FilePath);
 
                     } catch {
+
+                        // Do not replace an existing unreadable/malformed user
+                        // configuration with factory defaults during a save.
+                        if(File.Exists(FilePath)) throw;
 
                         // Otherwise, start with a pre-defined template
                         // and do not preserve the formatting
@@ -590,6 +608,8 @@ namespace OmenMon.Library {
 
                     // Continue with the configuration values
                     SetString(xml, XmlPrefix + "GpuPowerDefault", GpuPowerDefault);
+                    SetString(xml, XmlPrefix + "GpuPowerOverride", GpuPowerOverride);
+                    SetString(xml, XmlPrefix + "CpuPowerDefault", CpuPowerDefault);
                     SetUInt(xml, XmlPrefix + "GpuPowerSetInterval", (uint) GpuPowerSetInterval);
                     SetBool(xml, XmlPrefix + "GuiCloseWindowExit", GuiCloseWindowExit);
                     SetBool(xml, XmlPrefix + "GuiDpiChangeResize", GuiDpiChangeResize);
@@ -645,16 +665,30 @@ namespace OmenMon.Library {
                     xmlWriterSettings.Indent = true;
                     xmlWriterSettings.IndentChars = XmlSaveIndent;
                     xmlWriterSettings.NewLineHandling = NewLineHandling.Replace;
-                    using(XmlWriter xmlWriter = XmlWriter.Create(FilePath, xmlWriterSettings))
-                        xml.Save(xmlWriter);
+                    string temporaryPath = FilePath + ".writing-" + Guid.NewGuid().ToString("N");
+                    try {
+                        using(XmlWriter xmlWriter = XmlWriter.Create(temporaryPath, xmlWriterSettings))
+                            xml.Save(xmlWriter);
+                        if(File.Exists(FilePath))
+                            File.Replace(temporaryPath, FilePath, null);
+                        else
+                            File.Move(temporaryPath, FilePath);
+                    } finally {
+                        if(File.Exists(temporaryPath)) File.Delete(temporaryPath);
+                    }
 
-                } catch {
+                } catch(Exception error) {
+
+                    if(throwOnError)
+                        throw new IOException("Configuration could not be saved: " + FilePath, error);
 
                     // Show an error message if the settings could not be saved
                     App.Error("ErrConfigSave");
 
                 }
 
+            } else if(throwOnError) {
+                throw new IOException("Configuration file path is empty.");
             }
 
         }

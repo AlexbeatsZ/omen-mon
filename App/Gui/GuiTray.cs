@@ -287,9 +287,11 @@ namespace OmenMon.AppGui {
             // Power notifications arrive off the UI thread. Restore from the GUI
             // timer instead, after allowing firmware to finish waking up.
             int lightingDelay = Interlocked.CompareExchange(ref this.KeyboardRestoreDelay, -1, 0);
-            if(lightingDelay == 0 && Config.AutoConfig)
+            if(lightingDelay == 0 && Config.AutoConfig) {
                 this.Op.RestoreKeyboardLighting();
-            else if(lightingDelay > 0)
+                this.Op.RestoreGpuPower();
+                this.Op.RestoreCpuPower();
+            } else if(lightingDelay > 0)
                 Interlocked.CompareExchange(ref this.KeyboardRestoreDelay, lightingDelay - 1, lightingDelay);
 
             // Reset the tick counters

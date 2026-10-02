@@ -8,6 +8,7 @@ using System.ComponentModel;
 using System.Windows.Forms;
 using OmenMon.Hardware.Bios;
 using OmenMon.Hardware.Ec;
+using OmenMon.Hardware.Platform;
 using OmenMon.Library;
 
 namespace OmenMon.AppGui {
@@ -48,6 +49,7 @@ namespace OmenMon.AppGui {
         private const string P_FAN_PROG = Gui.M_ACT + Gui.G_FAN + "Prog";
 
         private const string P_GPU_POWER = Gui.M_ACT + Gui.G_GPU + "Power";
+        private const string I_GPU_POWER_FOLLOW = P_GPU_POWER + "Follow";
         private const string S_GPU_POWER_MAX = "Max";
         private const string S_GPU_POWER_MED = "Med";
         private const string S_GPU_POWER_MIN = "Min";
@@ -339,21 +341,28 @@ namespace OmenMon.AppGui {
 
         // Changes the GPU power settings
         private void EventActionGpuPower(object sender, EventArgs e) {
-            BiosData.GpuPowerData gpuPowerData;
+            BiosData.GpuPowerLevel? level;
 
             // Determine the GPU power data from the selected menu option
             if(((ToolStripMenuItem) sender).Name.EndsWith(S_GPU_POWER_MAX))
-                gpuPowerData = new BiosData.GpuPowerData(BiosData.GpuPowerLevel.Maximum);
+                level = BiosData.GpuPowerLevel.Maximum;
             else if(((ToolStripMenuItem) sender).Name.EndsWith(S_GPU_POWER_MED))
-                gpuPowerData = new BiosData.GpuPowerData(BiosData.GpuPowerLevel.Medium);
+                level = BiosData.GpuPowerLevel.Medium;
+            else if(((ToolStripMenuItem) sender).Name == I_GPU_POWER_FOLLOW)
+                level = null;
             else
-                gpuPowerData = new BiosData.GpuPowerData(BiosData.GpuPowerLevel.Minimum);
+                level = BiosData.GpuPowerLevel.Minimum;
 
             // Set the requested GPU power
-            Context.Op.Platform.System.SetGpuPower(gpuPowerData);
-
-            // Update the menu section
-            UpdateGpuPower();
+            try {
+                Context.Op.ApplyGpuPower(level);
+                UpdateGpuPower();
+                if(Context.FormMain != null && Context.FormMain.Visible)
+                    Context.FormMain.UpdateSys();
+            } catch(Exception error) {
+                Context.Op.FanProgramCallback(FanProgram.Severity.Important,
+                    "GPU power selection failed: " + error.Message);
+            }
 
         }
 
@@ -644,6 +653,7 @@ namespace OmenMon.AppGui {
                 new ToolStripMenuItem(Config.PresetRefreshRateLow.ToString() + " " + Config.Locale.Get(Config.L_UNIT + "Frequency") + " "
                     + Config.Locale.Get(Config.L_GUI_MENU + I_GPU_REFRESH_LOW), null, EventActionGpuRefresh, I_GPU_REFRESH_LOW),
                 new ToolStripSeparator(),
+                new ToolStripMenuItem("跟随风扇曲线", null, EventActionGpuPower, I_GPU_POWER_FOLLOW),
                 new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_GPU_POWER_MIN), null, EventActionGpuPower, I_GPU_POWER_MIN),
                 new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_GPU_POWER_MED), null, EventActionGpuPower, I_GPU_POWER_MED),
                 new ToolStripMenuItem(Config.Locale.Get(Config.L_GUI_MENU + I_GPU_POWER_MAX), null, EventActionGpuPower, I_GPU_POWER_MAX),
@@ -832,6 +842,8 @@ namespace OmenMon.AppGui {
 
             // Retrieve the current graphics setting table
             BiosData.GpuPowerData gpuPowerData = Context.Op.Platform.System.GetGpuPower(true);
+            ((ToolStripMenuItem) MenuGpu.DropDownItems[I_GPU_POWER_FOLLOW]).Checked =
+                String.IsNullOrEmpty(Config.GpuPowerOverride);
 
             // Compare the values to presets
             if(gpuPowerData.CustomTgp == BiosData.GpuCustomTgp.On) {

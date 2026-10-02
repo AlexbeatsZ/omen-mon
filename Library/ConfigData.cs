@@ -150,6 +150,12 @@ namespace OmenMon.Library {
         // Default GPU power setting, which might be loaded on startup
         public static string GpuPowerDefault = "Maximum";
 
+        // Empty follows the curve/startup default; a named level is a user override.
+        public static string GpuPowerOverride = "";
+
+        // Last accepted CPU command: PL1:PL4:CPUWithGpu, empty fields unchanged.
+        public static string CpuPowerDefault = "";
+
         // Interval between applying the GPU power settings again
         // (repeated, since they don't always take effect the first time)
         public static int GpuPowerSetInterval = 200;

@@ -73,19 +73,16 @@ namespace OmenMon.AppGui {
             // Set whether the application should start automatically with Windows
             Hw.TaskSet(Config.TaskId.Gui, Config.AutoStartup);
 
-            // Apply the default GPU power settings
-            this.Platform.System.SetGpuPower(
-                new BiosData.GpuPowerData(
-                    (BiosData.GpuPowerLevel)
-                        Enum.Parse(typeof(BiosData.GpuPowerLevel), Config.GpuPowerDefault)));
-
             // Apply the saved fan plan,
             // or the alternative program if no AC
             ApplyDefaultFanPlan();
+            RestoreGpuPower();
+            RestoreCpuPower();
 
             // Update the main form, if visible
-            if(Context.FormMain != null && Context.FormMain.Visible)
-                Context.FormMain.UpdateFanCtl();
+            GuiFormMain form = Context.FormMain;
+            if(form != null && !form.IsDisposed && form.IsHandleCreated)
+                form.BeginInvoke((Action) delegate() { if(!form.IsDisposed) form.UpdateFanCtl(); });
 
         }
 
@@ -93,10 +90,45 @@ namespace OmenMon.AppGui {
         // so as not to increase the application loading time
         public void AutoConfigRun() {
 
-            Thread autoConfig = new Thread(this.AutoConfig);
+            Thread autoConfig = new Thread(delegate() {
+                try { this.AutoConfig(); }
+                catch(Exception error) {
+                    FirmwareTrace.Status("GUI", "AutoConfig", "Failed: " + error.Message);
+                }
+            });
             autoConfig.IsBackground = true;
             autoConfig.Start();
 
+        }
+
+        public BiosData.GpuPowerData GetGpuFallback() {
+            BiosData.GpuPowerLevel level = this.Program.IsEnabled
+                ? Config.FanProgram[this.Program.GetName()].GpuPower
+                : GpuPowerControl.Parse(Config.GpuPowerDefault);
+            return new BiosData.GpuPowerData(level);
+        }
+
+        public BiosData.GpuPowerData ApplyGpuPower(BiosData.GpuPowerLevel? level) {
+            return this.Platform.Gpu.Select(level, GetGpuFallback());
+        }
+
+        public void RestoreGpuPower(bool force = false) {
+            try {
+                BiosData.GpuPowerData actual = this.Platform.Gpu.Ensure(GetGpuFallback(), force);
+                FirmwareTrace.Status("GPU", "Recovery", "Selection="
+                    + (String.IsNullOrEmpty(Config.GpuPowerOverride) ? "Follow" : Config.GpuPowerOverride)
+                    + "; " + GpuPowerControl.Describe(actual));
+            } catch(Exception error) {
+                FirmwareTrace.Status("GPU", "Recovery", "Failed: " + error.Message);
+            }
+        }
+
+        public void RestoreCpuPower() {
+            try {
+                this.Platform.Cpu.Restore();
+            } catch(Exception error) {
+                FirmwareTrace.Status("CPU", "Recovery", "Failed: " + error.Message);
+            }
         }
 
         public void RestoreKeyboardLighting() {
@@ -327,16 +359,16 @@ namespace OmenMon.AppGui {
                 && this.Platform.Fans.GetMax())
                 this.Platform.Fans.SetMax(true);
 
-            if(Config.PerformanceHeartbeatReapplyGpuPower
-                && this.Program.IsEnabled)
-                this.Platform.System.SetGpuPower(
-                    new BiosData.GpuPowerData(
-                        Config.FanProgram[this.Program.GetName()].GpuPower));
+            // A standalone GPU choice uses the existing heartbeat. Active curves
+            // already check it after each fan-mode update.
+            if((Config.PerformanceHeartbeatReapplyGpuPower && this.Program.IsEnabled)
+                || (!String.IsNullOrEmpty(Config.GpuPowerOverride)
+                    && !this.Program.IsEnabled && Config.AutoConfig))
+                RestoreGpuPower(Config.PerformanceHeartbeatReapplyGpuPower);
 
-            // CPU power reapply is intentionally not implemented here.
-            // The config flag is reserved for future advanced experiments:
-            // repeated CPU power writes can fight firmware, DPTF, thermals,
-            // AC adapter limits, and shared CPU/GPU power budgeting.
+            // Only reapply CPU limits when explicitly configured to do so.
+            if(Config.PerformanceHeartbeatReapplyCpuPower && Config.AutoConfig)
+                RestoreCpuPower();
 
         }
 
@@ -367,6 +399,8 @@ namespace OmenMon.AppGui {
             if(Config.FanLevelNeedManual && this.Platform.Fans.GetManual())
                 this.Platform.Fans.SetManual(false);
             this.Platform.Fans.SetMode(mode);
+            if(!String.IsNullOrEmpty(Config.GpuPowerOverride))
+                RestoreGpuPower();
 
         }
 
@@ -436,12 +470,15 @@ namespace OmenMon.AppGui {
                     this.Program.Run(Config.FanProgramDefault);
                 else
                     this.Program.Run(Config.FanProgramDefaultAlt, true);
+                RestoreGpuPower();
+                RestoreCpuPower();
 
             }
 
             // Separately also update the main form, if it's visible
-            if(Context.FormMain != null && Context.FormMain.Visible)
-               Context.FormMain.UpdateSys();
+            GuiFormMain form = Context.FormMain;
+            if(form != null && !form.IsDisposed && form.IsHandleCreated)
+                form.BeginInvoke((Action) delegate() { if(!form.IsDisposed) form.UpdateSys(); });
 
         }
 
